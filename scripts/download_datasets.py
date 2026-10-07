@@ -17,7 +17,7 @@ from datasets import Dataset, get_dataset_split_names, load_dataset
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "data" / "raw"
 
 
 @dataclass(frozen=True)

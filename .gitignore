@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
-# Downloaded datasets are local artifacts and should not be committed.
-data/*/*
-!data/*/.gitkeep
+# Downloaded datasets and experiment artifacts are local and should not be committed.
+data/**/*
+!data/**/
+!data/**/.gitkeep
+outputs/**/*
+!outputs/**/
+!outputs/**/.gitkeep

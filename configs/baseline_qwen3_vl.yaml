@@ -1,0 +1,40 @@
+seed: 42
+
+model:
+  id: Qwen/Qwen3-VL-2B-Instruct
+  dtype: auto
+  device_map: auto
+  attn_implementation: null
+  trust_remote_code: false
+  max_new_tokens: 32
+  do_sample: false
+
+run:
+  default_dataset: mme_test
+  output_dir: outputs/baseline
+  limit: null
+
+data:
+  sources:
+    mme_test:
+      kind: single
+      path: data/raw/MME/test
+      image_fields: [image]
+      question_fields: [question]
+      answer_fields: [answer]
+
+    mmb_test:
+      kind: single
+      path: data/raw/MMB/test
+      image_fields: [image]
+      question_fields: [question]
+      answer_fields: [answer, label]
+
+    gqa_val_balanced:
+      kind: paired
+      instructions: data/raw/GQA/val_balanced_instructions
+      images: data/raw/GQA/val_balanced_image
+      join_key_fields: [image_id, imageId, id]
+      image_fields: [image]
+      question_fields: [question, instruction]
+      answer_fields: [answer, label]

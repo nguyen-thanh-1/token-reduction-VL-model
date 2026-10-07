@@ -32,7 +32,8 @@ dataset download accidentally.
 
 - Use `datasets.load_dataset` and persist completed datasets with
   `save_to_disk`.
-- Store outputs under separate `data/GQA`, `data/MMB`, and `data/MME` trees.
+- Store outputs under separate `data/raw/GQA`, `data/raw/MMB`, and
+  `data/raw/MME` trees.
 - Keep downloaded data ignored by Git; commit only scripts and metadata.
 - Use Hugging Face CLI authentication or `HF_TOKEN`; never hard-code tokens.
 - Keep bulk downloads explicit and avoid triggering them during validation.
