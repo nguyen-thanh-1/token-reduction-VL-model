@@ -1,49 +1,144 @@
-# Token Reduction VL Model
+# Adaptive Visual Token Pruning for Vision Language Models
 
-## Download datasets
+This repository is the initial implementation scaffold for a thesis project on
+adaptive visual-token pruning in vision-language models. The proposal is still
+exploratory, so the code does not commit to a pruning method yet. The first
+milestone is reproducible data preparation and a full-token baseline with
+[Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct).
 
-The downloader uses the Hugging Face `datasets` library and stores each dataset
-separately under `data/`:
+## Current scope
+
+The current code prepares three things:
+
+1. Downloading the selected Hugging Face datasets into separate local folders.
+2. Running ordinary full-token Qwen3-VL inference and writing JSONL results.
+3. Providing a method-agnostic pruning interface for future Random-K,
+   question-aware, adaptive-budget, diversity-aware, or spatial methods.
+
+No pruning algorithm, training loop, or model-weight download is executed by
+the repository setup itself.
+
+## Project structure
 
 ```text
-data/
-├── GQA/
-│   ├── train_balanced_images/
-│   ├── train_balanced_instructions/
-│   ├── val_balanced_image/
-│   ├── val_balanced_instructions/
-│   ├── test_balanced_images/
-│   ├── test_balanced_instructions/
-│   ├── testdev_balanced_images/
-│   └── testdev_balanced_instructions/
-├── MMB/
-│   └── test/
-└── MME/
-    └── test/
+.
+├── configs/
+│   └── baseline_qwen3_vl.yaml       # model, data sources, and run defaults
+├── data/
+│   ├── raw/                         # downloaded Hugging Face datasets
+│   │   ├── GQA/
+│   │   ├── MMB/
+│   │   └── MME/
+│   ├── processed/                   # normalized or filtered samples
+│   ├── features/                    # cached visual features
+│   ├── predictions/                 # optional per-example predictions
+│   └── metrics/                     # evaluation summaries
+├── outputs/
+│   └── baseline/                    # baseline JSONL outputs
+├── scripts/
+│   ├── download_datasets.py         # dataset downloader
+│   └── run_baseline.py              # full-token baseline runner
+├── src/token_reduction_vl/
+│   ├── data/                        # canonical sample and source adapters
+│   ├── evaluation/                  # JSONL runner and metrics
+│   ├── models/                      # Qwen3-VL wrapper
+│   └── pruning/                     # future pruning interfaces
+└── .agents/                         # project-specific agent instructions
 ```
 
-Install the project dependencies with `uv`:
+Downloaded data, model caches, virtual environments, and experiment outputs
+are ignored by Git. Only code, configuration, and metadata should be committed.
+
+## Environment setup
+
+The project uses Python 3.12 and `uv`:
 
 ```powershell
 uv sync
 ```
 
-Download one dataset or all datasets:
+For private or gated Hugging Face resources, authenticate separately:
+
+```powershell
+hf auth login
+```
+
+The Qwen3-VL baseline is intended for a CUDA-capable machine. `device_map: auto`
+and `dtype: auto` are configured in `configs/baseline_qwen3_vl.yaml`; adjust
+them there if the available hardware requires a different setup.
+
+## Download datasets
+
+The downloader uses `datasets.load_dataset` and stores each completed split with
+`save_to_disk` under `data/raw/`:
 
 ```powershell
 uv run python scripts/download_datasets.py --dataset gqa
 uv run python scripts/download_datasets.py --dataset mmb
 uv run python scripts/download_datasets.py --dataset mme
+```
+
+To download every configured dataset:
+
+```powershell
 uv run python scripts/download_datasets.py --dataset all
 ```
 
-By default, the downloaded datasets are saved in `data/`. Use
-`--output-dir` to select another location. The GQA downloader intentionally
-downloads only the balanced configurations listed above; it does not download
-the `*_all_*` configurations.
+GQA is intentionally restricted to these balanced configurations:
 
-For private or gated datasets, authenticate with Hugging Face before running:
+```text
+test_balanced_images
+test_balanced_instructions
+testdev_balanced_images
+testdev_balanced_instructions
+train_balanced_images
+train_balanced_instructions
+val_balanced_image
+val_balanced_instructions
+```
+
+The `*_all_*` GQA configurations are not downloaded.
+
+## Run the full-token baseline
+
+After the relevant dataset has been downloaded, run a small smoke subset first:
 
 ```powershell
-hf auth login
+uv run python scripts/run_baseline.py `
+  --config configs/baseline_qwen3_vl.yaml `
+  --dataset mme_test `
+  --limit 10
 ```
+
+Other configured sources are `mmb_test` and `gqa_val_balanced`. The GQA source
+joins the balanced instructions and balanced images by the configured image
+key. Results are written to `outputs/baseline/<dataset>.jsonl` and include the
+prediction, reference answers, exact-match when available, latency, input and
+output token counts, and peak VRAM when CUDA is available.
+
+The baseline uses the standard Qwen3-VL Transformers path: an
+`AutoProcessor`, `Qwen3VLForConditionalGeneration`, `apply_chat_template`, and
+`generate`. It keeps all visual tokens and records `pruning_method: "none"`.
+
+## Research extension path
+
+The proposal suggests evaluating quality and efficiency together rather than
+optimizing accuracy alone. The intended order is:
+
+1. Full-token baseline as the quality reference.
+2. Random-K and uniform spatial baselines.
+3. Fixed-K question-aware ranking.
+4. Adaptive budget prediction.
+5. Diversity-aware selection and, if needed, spatial safeguards.
+6. Ablations, cross-dataset evaluation, latency/VRAM profiling, and token
+   visualizations.
+
+`src/token_reduction_vl/pruning/base.py` defines the initial interface without
+assuming which of these methods will become the thesis contribution.
+
+## Current validation policy
+
+The repository setup does not download datasets or model weights automatically.
+Use the commands above explicitly when ready. At this stage, validation should
+focus on configuration, import/syntax checks, and small smoke subsets before
+any full benchmark run.
