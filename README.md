@@ -36,11 +36,14 @@ the repository setup itself.
 │   ├── predictions/                 # optional per-example predictions
 │   └── metrics/                     # evaluation summaries
 ├── outputs/
-│   └── baseline/                    # baseline JSONL outputs
+│   ├── baseline/                    # shareable baseline prediction JSONL
+│   ├── reports/                     # shareable plots, tables, and reports
+│   └── checkpoints/                 # local model weights, ignored by Git
 ├── scripts/
 │   ├── download_datasets.py         # dataset downloader
 │   ├── preprocess_datasets.py       # canonical schema conversion
 │   ├── evaluate_predictions.py      # benchmark-specific metrics
+│   ├── visualize_benchmarks.py      # structured plots, tables, and report
 │   └── run_baseline.py              # full-token baseline runner
 ├── src/token_reduction_vl/
 │   ├── data/                        # canonical sample and source adapters
@@ -50,8 +53,10 @@ the repository setup itself.
 └── .agents/                         # project-specific agent instructions
 ```
 
-Downloaded data, model caches, virtual environments, and experiment outputs
-are ignored by Git. Only code, configuration, and metadata should be committed.
+Downloaded data, model caches, virtual environments, temporary test files, and
+training checkpoints are ignored by Git. Benchmark predictions and reports in
+`outputs/` are intentionally versioned so team members can inspect and compare
+the same results without rerunning inference.
 
 ## Environment setup
 
@@ -217,6 +222,47 @@ GQA uses normalized short-answer accuracy, MMBench parses and scores A-D/E
 labels, and MME reports question accuracy plus category-level pair accuracy
 (`accuracy+`) and the conventional combined MME score. Unlabelled inference
 files report no accuracy rather than treating missing labels as incorrect.
+
+## Visualize the complete baseline
+
+After all three full prediction files exist, generate the complete report:
+
+```powershell
+uv run python scripts/visualize_benchmarks.py
+```
+
+The report uses `configs/report_baseline.yaml` as the single source of truth
+for input predictions, model identity, precision, pruning method, and output
+location. Generated artifacts are deliberately separated from raw predictions
+and canonical metric files:
+
+```text
+outputs/reports/baseline/qwen3-vl-2b-instruct-full-token-bf16/
+├── report.md
+├── summary.json
+├── manifest.json
+├── figures/
+│   ├── 01_quality_accuracy.png
+│   ├── 02_efficiency_overview.png
+│   ├── 03_latency_distribution.png
+│   ├── 04_tokens_vs_latency.png
+│   └── 05_mme_categories.png
+└── tables/
+    ├── benchmark_summary.csv
+    └── mme_categories.csv
+```
+
+The numbered figures keep a stable reading order. Tables remain machine
+readable, while `manifest.json` records the source paths, sizes, row counts,
+and modification times. Existing report directories are protected from
+accidental replacement; regenerate the same report explicitly with:
+
+```powershell
+uv run python scripts/visualize_benchmarks.py --overwrite
+```
+
+Use a different `report.id` and `report.output_dir` for future pruning methods
+instead of mixing them into this full-token baseline directory.
 
 ## Research extension path
 

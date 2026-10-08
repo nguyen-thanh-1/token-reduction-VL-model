@@ -1,0 +1,39 @@
+{
+  "report_schema_version": "1.0",
+  "report_id": "qwen3-vl-2b-instruct-full-token-bf16",
+  "generated_at": "2026-10-08T08:58:54.776696+00:00",
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "precision": "bf16",
+  "pruning_method": "none",
+  "inputs": {
+    "gqa": {
+      "path": "outputs/baseline/gqa_testdev_balanced.jsonl",
+      "size_bytes": 18816620,
+      "rows": 12578,
+      "modified_at": "2026-10-08T07:02:16.853667+00:00"
+    },
+    "mmbench": {
+      "path": "outputs/baseline/mmb_validation.jsonl",
+      "size_bytes": 5858504,
+      "rows": 4329,
+      "modified_at": "2026-10-08T07:23:49.654298+00:00"
+    },
+    "mme": {
+      "path": "outputs/baseline/mme_test.jsonl",
+      "size_bytes": 1855103,
+      "rows": 2374,
+      "modified_at": "2026-10-08T08:34:22.865163+00:00"
+    }
+  },
+  "generated_files": [
+    "report.md",
+    "summary.json",
+    "tables/benchmark_summary.csv",
+    "tables/mme_categories.csv",
+    "figures/01_quality_accuracy.png",
+    "figures/02_efficiency_overview.png",
+    "figures/03_latency_distribution.png",
+    "figures/04_tokens_vs_latency.png",
+    "figures/05_mme_categories.png"
+  ]
+}
