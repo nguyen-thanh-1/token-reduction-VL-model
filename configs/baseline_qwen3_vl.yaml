@@ -33,7 +33,7 @@ data:
     gqa_val_balanced:
       kind: paired
       instructions: data/raw/GQA/val_balanced_instructions
-      images: data/raw/GQA/val_balanced_image
+      images: data/raw/GQA/val_balanced_images
       join_key_fields: [image_id, imageId, id]
       image_fields: [image]
       question_fields: [question, instruction]

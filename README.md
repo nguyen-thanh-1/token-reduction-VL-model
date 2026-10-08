@@ -69,8 +69,8 @@ them there if the available hardware requires a different setup.
 
 ## Download datasets
 
-The downloader uses `datasets.load_dataset` and stores each completed split with
-`save_to_disk` under `data/raw/`:
+The downloader uses `datasets.load_dataset` and exports every completed
+configuration under `data/raw/` with visible image files:
 
 ```powershell
 uv run python scripts/download_datasets.py --dataset gqa
@@ -93,11 +93,31 @@ testdev_balanced_images
 testdev_balanced_instructions
 train_balanced_images
 train_balanced_instructions
-val_balanced_image
+val_balanced_images
 val_balanced_instructions
 ```
 
 The `*_all_*` GQA configurations are not downloaded.
+
+Each output directory contains:
+
+```text
+<configuration>/
+├── images/          # JPEG/PNG/WebP files when the source has an image column
+├── records.jsonl    # metadata; image values are relative paths into images/
+└── manifest.json    # source repository, config, split, row and image counts
+```
+
+Older directories created by `save_to_disk` are detected and converted in
+place, so rerunning the same command exports their embedded images without
+downloading the dataset again. The existing Arrow files are left untouched.
+
+To convert only datasets that are already present locally and avoid downloading
+missing GQA configurations, run:
+
+```powershell
+uv run python scripts/download_datasets.py --dataset all --existing-only
+```
 
 ## Run the full-token baseline
 
