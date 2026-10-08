@@ -23,6 +23,8 @@ the repository setup itself.
 
 ```text
 .
+├── architecture/                    # editable model diagrams and exports
+│   └── model-goc-baseline/          # full-token Qwen3-VL baseline
 ├── configs/
 │   ├── baseline_qwen3_vl.yaml       # model, data sources, and run defaults
 │   └── data_v1.yaml                 # split roles and canonical paths
@@ -57,6 +59,18 @@ Downloaded data, model caches, virtual environments, temporary test files, and
 training checkpoints are ignored by Git. Benchmark predictions and reports in
 `outputs/` are intentionally versioned so team members can inspect and compare
 the same results without rerunning inference.
+
+## Model architecture diagrams
+
+Editable network diagrams live under `architecture/`, with one directory per
+baseline or pruning method. The current full-token model is documented in:
+
+- `architecture/model-goc-baseline/qwen3-vl-2b-instruct-baseline.drawio`
+- `architecture/model-goc-baseline/README.md`
+
+The Draw.io source has separate pages for the end-to-end execution path and
+module-level details. Export PNG, SVG, or PDF versions into the adjacent
+`exports/` directory so each design remains self-contained.
 
 ## Environment setup
 
