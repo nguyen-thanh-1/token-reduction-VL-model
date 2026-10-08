@@ -146,6 +146,14 @@ def test_report_has_separate_figures_tables_and_manifest(tmp_path: Path) -> None
     assert (output / "tables" / "benchmark_summary.csv").is_file()
     assert (output / "tables" / "mme_categories.csv").is_file()
     assert len(list((output / "figures").glob("*.png"))) == 5
+    report = (output / "report.md").read_text(encoding="utf-8")
+    assert "## Metric definitions and rationale" in report
+    assert "MME Accuracy+" in report
+    assert "Generation latency" in report
+    assert "Image preprocessing" in report
+    assert "Figure 4 — Input tokens versus latency" in report
+    assert "at most 10 deterministically" in report
+    assert "## Output integrity" in report
 
     with pytest.raises(FileExistsError, match="--overwrite"):
         build_benchmark_report(config, project_root=tmp_path, output_root=output)

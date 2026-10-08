@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from token_reduction_vl.evaluation.metrics import score_prediction_records
 
 
-REPORT_SCHEMA_VERSION = "1.0"
+REPORT_SCHEMA_VERSION = "1.1"
 COLORS = {
     "gqa": "#4C78A8",
     "mmbench": "#F58518",
@@ -416,7 +416,12 @@ def _format_mme_score(run: BenchmarkRun) -> str:
 
 
 def _render_report(
-    *, title: str, runs: list[BenchmarkRun], mme: BenchmarkRun, model: Mapping[str, Any]
+    *,
+    title: str,
+    runs: list[BenchmarkRun],
+    mme: BenchmarkRun,
+    model: Mapping[str, Any],
+    max_scatter_points: int,
 ) -> str:
     quality_rows = "\n".join(
         f"| {run.label} | {run.metrics['labelled_rows']:,} | "
@@ -424,14 +429,33 @@ def _render_report(
         f"{_format_mme_score(run)} |"
         for run in runs
     )
-    efficiency_rows = "\n".join(
+    runtime_rows = "\n".join(
         f"| {run.label} | {run.performance['mean_latency_seconds']:.4f} | "
+        f"{run.performance['median_latency_seconds']:.4f} | "
         f"{run.performance['p95_latency_seconds']:.4f} | "
-        f"{run.performance['mean_input_tokens']:.1f} | "
+        f"{run.performance['max_latency_seconds']:.4f} | "
+        f"{run.performance['total_generation_minutes']:.2f} | "
         f"{run.performance['max_peak_vram_mb'] / 1024.0:.2f} |"
         for run in runs
     )
+    token_rows = "\n".join(
+        f"| {run.label} | "
+        f"{run.performance['mean_input_tokens']:.1f} | "
+        f"{run.performance['p95_input_tokens']:.1f} | "
+        f"{run.performance['mean_output_tokens']:.1f} | "
+        f"{run.performance['max_output_tokens']:.0f} |"
+        for run in runs
+    )
+    integrity_rows = "\n".join(
+        f"| {run.label} | {run.performance['rows']:,} | "
+        f"{run.performance['unique_sample_ids']:,} | "
+        f"{run.performance['duplicate_sample_ids']:,} | "
+        f"{run.performance['empty_predictions']:,} |"
+        for run in runs
+    )
     categories = mme.metrics["categories"]
+    category_count = len(categories)
+    maximum_mme_score = 200 * category_count
     best_name, best = max(categories.items(), key=lambda item: item[1]["score"])
     worst_name, worst = min(categories.items(), key=lambda item: item[1]["score"])
     return f"""# {title}
@@ -443,28 +467,94 @@ def _render_report(
 - Pruning method: `{model['pruning_method']}`
 - Report schema: `{REPORT_SCHEMA_VERSION}`
 
+## How to interpret this report
+
+Quality and efficiency are deliberately reported as separate axes. Higher
+accuracy and MME scores are better; lower latency, token count, and VRAM are
+better. A useful token-reduction method should reduce computation while keeping
+the quality loss small. The three benchmark accuracies must not be averaged
+because their tasks and scoring protocols differ.
+
+## Metric definitions and rationale
+
+### Answer-quality metrics
+
+| Metric | Definition used in this project | Why it is reported |
+| --- | --- | --- |
+| Labelled rows | Samples with an available reference answer or answer label. Unlabelled rows are excluded from the accuracy denominator. | Makes the evaluated sample count explicit and prevents missing labels from silently lowering accuracy. |
+| GQA accuracy | Percentage of labelled questions whose prediction exactly matches any reference after trimming, case-folding, and collapsing repeated whitespace. | Directly measures open-ended visual question answering quality on the balanced GQA split. |
+| MMBench accuracy | Percentage of labelled questions with the correct A–E option. The parser accepts an option label or an exact match to the option text. | Measures multiple-choice multimodal reasoning while handling the two common answer formats. |
+| MME question accuracy | Percentage of individual yes/no questions answered correctly. The first `yes` or `no` token in the prediction is compared with the reference. | Gives an intuitive question-level percentage, but it is supplementary to the official-style MME score. |
+| MME Accuracy+ | Within one category, the percentage of complete image pairs for which both paired yes/no questions are correct. | Penalizes inconsistent perception: one correct answer from a positive/negative pair is not sufficient. |
+| MME category score | `question accuracy (%) + Accuracy+ (%)`; range 0–200 for each category. | Preserves both per-question correctness and pair consistency. |
+| MME total score | Sum of all category scores. This report contains {category_count} categories, so the observed scale is 0–{maximum_mme_score}. | This is the primary aggregate used to compare MME runs; it is not a percentage and should not be compared numerically with GQA/MMBench accuracy. |
+
+### Efficiency metrics
+
+| Metric | Definition used in this project | Why it is reported |
+| --- | --- | --- |
+| Generation latency | Wall-clock seconds around `model.generate()` for one sample. Image preprocessing, prompt construction, decoding text, file I/O, and metric computation are excluded. | Isolates model-generation cost, which visual-token pruning is intended to reduce. |
+| Mean latency | Arithmetic mean of per-sample generation latency. | Summarizes overall runtime, but can be pulled upward by slow samples. |
+| Median latency | Middle per-sample latency. | Represents a typical sample and is robust to a long latency tail. |
+| P95 latency | Deterministic sorted-index estimate of the 95th percentile; approximately 95% of samples are no slower than this value. | Captures tail latency that the mean can hide, especially for high-resolution images with many visual tokens. |
+| Maximum latency | Slowest recorded sample. | Exposes worst observed behavior and helps identify samples for diagnosis. |
+| Input tokens | Length of the processor-produced input sequence, including text tokens and visual placeholder positions replaced by visual embeddings. | Serves as a direct workload proxy for the language decoder. |
+| Output tokens | Number of tokens generated after the input prompt. | Separates response-length effects from input visual-token effects. |
+| Peak VRAM | Maximum CUDA memory allocated during generation after resetting peak-memory statistics; includes resident model memory plus generation-time tensors and KV cache. | Shows whether a method improves memory feasibility, not only speed. |
+
+The current full-token baseline retains 100% of the visual tokens emitted by
+Qwen3-VL's built-in 2×2 spatial patch merger. Future pruning reports should add
+the retained visual-token count and ratio while keeping these definitions
+unchanged.
+
 ## Quality
 
 | Benchmark | Labelled rows | Accuracy | MME score |
 | --- | ---: | ---: | ---: |
 {quality_rows}
 
-The three accuracy values follow different benchmark protocols and are not
-averaged into a single score.
-
 ![Quality overview](figures/01_quality_accuracy.png)
+
+**Figure 1 — Quality accuracy.** Each bar is the dataset-specific percentage
+defined above. Use it to compare the same benchmark across model or pruning
+runs. Do not average the three bars or compare the MME percentage with its
+separate total score.
 
 ## Efficiency
 
-| Benchmark | Mean latency (s) | P95 latency (s) | Mean input tokens | Peak VRAM (GiB) |
+### Runtime and memory
+
+| Benchmark | Mean latency (s) | Median (s) | P95 (s) | Maximum (s) | Total generation (min) | Peak VRAM (GiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+{runtime_rows}
+
+### Token counts
+
+| Benchmark | Mean input tokens | P95 input tokens | Mean output tokens | Maximum output tokens |
 | --- | ---: | ---: | ---: | ---: |
-{efficiency_rows}
+{token_rows}
 
 ![Efficiency overview](figures/02_efficiency_overview.png)
 
+**Figure 2 — Efficiency overview.** The first panel compares mean and P95
+generation latency on a logarithmic scale, the second compares mean input
+tokens, and the third shows maximum observed VRAM. Mean describes aggregate
+cost; P95 and maximum VRAM expose difficult high-cost samples.
+
 ![Latency distribution](figures/03_latency_distribution.png)
 
+**Figure 3 — Latency distribution.** Box centers are medians, boxes span the
+25th–75th percentiles, and whiskers use the standard 1.5×IQR rule. Outlier
+markers are hidden to keep the three distributions readable, but those samples
+remain included in every table statistic. The vertical axis is logarithmic.
+
 ![Tokens versus latency](figures/04_tokens_vs_latency.png)
+
+**Figure 4 — Input tokens versus latency.** Each point is one sample; both axes
+are logarithmic. An upward trend indicates that longer multimodal sequences
+cost more generation time and therefore offer an opportunity for visual-token
+reduction. For readability, at most {max_scatter_points:,} deterministically
+spaced records per dataset are plotted; table metrics always use every record.
 
 ## MME category analysis
 
@@ -473,6 +563,21 @@ averaged into a single score.
 - Total MME score: {mme.metrics['mme_total_score']:.2f}.
 
 ![MME categories](figures/05_mme_categories.png)
+
+**Figure 5 — MME categories.** The left panel separates question Accuracy from
+pair Accuracy+. The right panel shows their sum, sorted from weakest to
+strongest category. This reveals whether a pruning method damages particular
+capabilities even when the total score appears stable.
+
+## Output integrity
+
+| Benchmark | Rows | Unique sample IDs | Duplicate IDs | Empty predictions |
+| --- | ---: | ---: | ---: | ---: |
+{integrity_rows}
+
+Duplicate IDs or empty predictions should be zero before results are treated
+as a valid benchmark. These checks verify output completeness; they do not
+replace dataset-version and prompt-configuration provenance in `manifest.json`.
 
 ## Artifact layout
 
@@ -549,6 +654,7 @@ def build_benchmark_report(
             runs=runs,
             mme=mme,
             model=report_config,
+            max_scatter_points=max_points,
         ),
     )
 

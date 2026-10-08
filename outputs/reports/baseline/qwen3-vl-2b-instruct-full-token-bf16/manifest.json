@@ -1,7 +1,7 @@
 {
-  "report_schema_version": "1.0",
+  "report_schema_version": "1.1",
   "report_id": "qwen3-vl-2b-instruct-full-token-bf16",
-  "generated_at": "2026-10-08T08:58:54.776696+00:00",
+  "generated_at": "2026-10-08T09:37:16.776888+00:00",
   "model_id": "Qwen/Qwen3-VL-2B-Instruct",
   "precision": "bf16",
   "pruning_method": "none",
