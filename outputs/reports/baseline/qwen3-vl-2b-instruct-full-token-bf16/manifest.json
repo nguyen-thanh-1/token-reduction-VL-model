@@ -1,7 +1,7 @@
 {
   "report_schema_version": "1.1",
   "report_id": "qwen3-vl-2b-instruct-full-token-bf16",
-  "generated_at": "2026-10-08T09:37:16.776888+00:00",
+  "generated_at": "2026-10-08T11:52:49.254169+00:00",
   "model_id": "Qwen/Qwen3-VL-2B-Instruct",
   "precision": "bf16",
   "pruning_method": "none",
@@ -34,6 +34,7 @@
     "figures/02_efficiency_overview.png",
     "figures/03_latency_distribution.png",
     "figures/04_tokens_vs_latency.png",
-    "figures/05_mme_categories.png"
+    "figures/05_mme_categories.png",
+    "failure_cases.html"
   ]
 }

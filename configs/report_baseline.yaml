@@ -20,3 +20,13 @@ predictions:
 visualization:
   dpi: 180
   max_scatter_points_per_dataset: 5000
+
+failure_gallery:
+  filename: failure_cases.html
+  max_cases_per_dataset: 12
+  image_max_width: 720
+  jpeg_quality: 82
+  canonical_sources:
+    gqa: data/processed/v1/gqa/testdev.jsonl
+    mmbench: data/processed/v1/mmbench/validation.jsonl
+    mme: data/processed/v1/mme/test.jsonl

@@ -78,6 +78,19 @@ def _mme_correct(record: Mapping[str, Any]) -> bool | None:
     return predicted is not None and expected is not None and predicted == expected
 
 
+def score_prediction_record(record: Mapping[str, Any]) -> bool | None:
+    """Return benchmark-specific correctness for one saved prediction record."""
+
+    dataset = str(_record_field(record, "dataset", ""))
+    if dataset == "gqa":
+        return _gqa_correct(record)
+    if dataset == "mmbench":
+        return _mmb_correct(record)
+    if dataset == "mme":
+        return _mme_correct(record)
+    raise ValueError(f"Unsupported benchmark dataset: {dataset!r}")
+
+
 def _basic_result(dataset: str, values: list[bool | None]) -> dict[str, Any]:
     labelled = [value for value in values if value is not None]
     correct = sum(labelled)
@@ -92,7 +105,7 @@ def _basic_result(dataset: str, values: list[bool | None]) -> dict[str, Any]:
 
 
 def _score_mme(records: list[Mapping[str, Any]]) -> dict[str, Any]:
-    values = [_mme_correct(record) for record in records]
+    values = [score_prediction_record(record) for record in records]
     result = _basic_result("mme", values)
     categories: dict[str, list[tuple[str, bool]]] = defaultdict(list)
     for record, correct in zip(records, values, strict=True):
@@ -140,10 +153,8 @@ def score_prediction_records(records: Iterable[Mapping[str, Any]]) -> dict[str, 
     if len(datasets) != 1 or "" in datasets:
         raise ValueError(f"Expected exactly one dataset in predictions, found {sorted(datasets)}")
     dataset = datasets.pop()
-    if dataset == "gqa":
-        return _basic_result(dataset, [_gqa_correct(record) for record in rows])
-    if dataset == "mmbench":
-        return _basic_result(dataset, [_mmb_correct(record) for record in rows])
+    if dataset in {"gqa", "mmbench"}:
+        return _basic_result(dataset, [score_prediction_record(record) for record in rows])
     if dataset == "mme":
         return _score_mme(rows)
     raise ValueError(f"Unsupported benchmark dataset: {dataset!r}")

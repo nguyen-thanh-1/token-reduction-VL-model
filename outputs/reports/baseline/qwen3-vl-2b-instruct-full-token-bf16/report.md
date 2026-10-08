@@ -115,6 +115,15 @@ pair Accuracy+. The right panel shows their sum, sorted from weakest to
 strongest category. This reveals whether a pruning method damages particular
 capabilities even when the total score appears stable.
 
+## Incorrect-answer gallery
+
+[Open the self-contained HTML failure gallery](failure_cases.html) to
+inspect a category-diverse sample of mistakes with the original image,
+question, ground-truth answer, model answer, token counts, and latency. The
+HTML embeds its thumbnails, so it can be opened offline or shared without the
+local dataset directory.
+
+
 ## Output integrity
 
 | Benchmark | Rows | Unique sample IDs | Duplicate IDs | Empty predictions |
@@ -134,3 +143,4 @@ replace dataset-version and prompt-configuration provenance in `manifest.json`.
 - `tables/mme_categories.csv`: MME category-level values.
 - `manifest.json`: report identity, input provenance, and generated files.
 - `figures/`: deterministic numbered figures in reading order.
+- `failure_cases.html`: interactive, self-contained gallery of incorrect predictions.

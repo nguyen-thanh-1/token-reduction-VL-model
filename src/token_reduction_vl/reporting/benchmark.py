@@ -17,6 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 from token_reduction_vl.evaluation.metrics import score_prediction_records
+from token_reduction_vl.reporting.failure_gallery import build_failure_gallery
 
 
 REPORT_SCHEMA_VERSION = "1.1"
@@ -422,6 +423,7 @@ def _render_report(
     mme: BenchmarkRun,
     model: Mapping[str, Any],
     max_scatter_points: int,
+    failure_gallery_filename: str | None,
 ) -> str:
     quality_rows = "\n".join(
         f"| {run.label} | {run.metrics['labelled_rows']:,} | "
@@ -458,6 +460,22 @@ def _render_report(
     maximum_mme_score = 200 * category_count
     best_name, best = max(categories.items(), key=lambda item: item[1]["score"])
     worst_name, worst = min(categories.items(), key=lambda item: item[1]["score"])
+    failure_gallery_section = ""
+    failure_gallery_artifact = ""
+    if failure_gallery_filename is not None:
+        failure_gallery_section = f"""
+## Incorrect-answer gallery
+
+[Open the self-contained HTML failure gallery]({failure_gallery_filename}) to
+inspect a category-diverse sample of mistakes with the original image,
+question, ground-truth answer, model answer, token counts, and latency. The
+HTML embeds its thumbnails, so it can be opened offline or shared without the
+local dataset directory.
+"""
+        failure_gallery_artifact = (
+            f"- `{failure_gallery_filename}`: interactive, self-contained gallery of "
+            "incorrect predictions.\n"
+        )
     return f"""# {title}
 
 ## Run identity
@@ -568,6 +586,7 @@ spaced records per dataset are plotted; table metrics always use every record.
 pair Accuracy+. The right panel shows their sum, sorted from weakest to
 strongest category. This reveals whether a pruning method damages particular
 capabilities even when the total score appears stable.
+{failure_gallery_section}
 
 ## Output integrity
 
@@ -586,7 +605,7 @@ replace dataset-version and prompt-configuration provenance in `manifest.json`.
 - `tables/mme_categories.csv`: MME category-level values.
 - `manifest.json`: report identity, input provenance, and generated files.
 - `figures/`: deterministic numbered figures in reading order.
-"""
+{failure_gallery_artifact}"""
 
 
 def build_benchmark_report(
@@ -607,6 +626,12 @@ def build_benchmark_report(
     mme = next(run for run in runs if run.key == "mme")
     dpi = int(visualization.get("dpi", 180))
     max_points = int(visualization.get("max_scatter_points_per_dataset", 5000))
+    gallery_config = config.get("failure_gallery")
+    gallery_filename = (
+        str(gallery_config.get("filename", "failure_cases.html"))
+        if isinstance(gallery_config, Mapping)
+        else None
+    )
 
     figure_names = (
         "01_quality_accuracy.png",
@@ -655,8 +680,16 @@ def build_benchmark_report(
             mme=mme,
             model=report_config,
             max_scatter_points=max_points,
+            failure_gallery_filename=gallery_filename,
         ),
     )
+
+    if gallery_filename is not None:
+        build_failure_gallery(
+            config,
+            project_root=project_root,
+            output_path=paths.root / gallery_filename,
+        )
 
     generated_files = [
         "report.md",
@@ -665,6 +698,8 @@ def build_benchmark_report(
         "tables/mme_categories.csv",
         *(f"figures/{name}" for name in figure_names),
     ]
+    if gallery_filename is not None:
+        generated_files.append(gallery_filename)
     manifest = {
         "report_schema_version": REPORT_SCHEMA_VERSION,
         "report_id": report_config["id"],
