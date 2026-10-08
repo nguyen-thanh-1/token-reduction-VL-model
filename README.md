@@ -8,11 +8,12 @@ milestone is reproducible data preparation and a full-token baseline with
 
 ## Current scope
 
-The current code prepares three things:
+The current code prepares four things:
 
 1. Downloading the selected Hugging Face datasets into separate local folders.
-2. Running ordinary full-token Qwen3-VL inference and writing JSONL results.
-3. Providing a method-agnostic pruning interface for future Random-K,
+2. Normalizing GQA, MMBench, and MME into one versioned VQA JSONL schema.
+3. Running ordinary full-token Qwen3-VL inference and benchmark-specific scoring.
+4. Providing a method-agnostic pruning interface for future Random-K,
    question-aware, adaptive-budget, diversity-aware, or spatial methods.
 
 No pruning algorithm, training loop, or model-weight download is executed by
@@ -23,13 +24,14 @@ the repository setup itself.
 ```text
 .
 ├── configs/
-│   └── baseline_qwen3_vl.yaml       # model, data sources, and run defaults
+│   ├── baseline_qwen3_vl.yaml       # model, data sources, and run defaults
+│   └── data_v1.yaml                 # split roles and canonical paths
 ├── data/
 │   ├── raw/                         # downloaded Hugging Face datasets
 │   │   ├── GQA/
 │   │   ├── MMB/
 │   │   └── MME/
-│   ├── processed/                   # normalized or filtered samples
+│   ├── processed/v1/                # canonical, versioned JSONL records
 │   ├── features/                    # cached visual features
 │   ├── predictions/                 # optional per-example predictions
 │   └── metrics/                     # evaluation summaries
@@ -37,6 +39,8 @@ the repository setup itself.
 │   └── baseline/                    # baseline JSONL outputs
 ├── scripts/
 │   ├── download_datasets.py         # dataset downloader
+│   ├── preprocess_datasets.py       # canonical schema conversion
+│   ├── evaluate_predictions.py      # benchmark-specific metrics
 │   └── run_baseline.py              # full-token baseline runner
 ├── src/token_reduction_vl/
 │   ├── data/                        # canonical sample and source adapters
@@ -56,6 +60,18 @@ The project uses Python 3.12 and `uv`:
 ```powershell
 uv sync
 ```
+
+On Windows, the project pins the compatible `torch 2.14.1` and
+`torchvision 0.29.1` CUDA 13.0 wheels through `uv`. After syncing, verify that
+the NVIDIA GPU is visible before running the model:
+
+```powershell
+uv run python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+The current CUDA wheel choice requires an NVIDIA driver capable of CUDA 13.0.
+Use a matching PyTorch index for a different machine rather than installing a
+CPU-only `torch` build accidentally.
 
 For private or gated Hugging Face resources, authenticate separately:
 
@@ -99,6 +115,10 @@ val_balanced_instructions
 
 The `*_all_*` GQA configurations are not downloaded.
 
+For MMBench, the downloader retrieves both `validation` and `test`.
+`validation` contains labels and is used for local evaluation; `test` is kept
+for inference/submission and should not be reported as locally scored accuracy.
+
 Each output directory contains:
 
 ```text
@@ -119,6 +139,51 @@ missing GQA configurations, run:
 uv run python scripts/download_datasets.py --dataset all --existing-only
 ```
 
+## Preprocess into the shared schema
+
+Preprocessing never downloads data and never duplicates image files. It writes
+model-agnostic JSONL records whose `image` field points back to `data/raw`:
+
+```powershell
+# Cheap pipeline check: at most 10 rows from every available split
+uv run python scripts/preprocess_datasets.py --dataset all --limit 10
+
+# Replace smoke outputs with complete processed files
+uv run python scripts/preprocess_datasets.py --dataset all --overwrite
+```
+
+MMBench validation must be downloaded before `--dataset all` can complete. A
+single dataset or split can be processed independently, for example:
+
+```powershell
+uv run python scripts/preprocess_datasets.py --dataset gqa --split train
+uv run python scripts/preprocess_datasets.py --dataset mme --split test
+```
+
+Outputs are organized as:
+
+```text
+data/processed/v1/
+├── gqa/{train,val,testdev,test}.jsonl
+├── mmbench/{validation,test}.jsonl
+├── mme/test.jsonl
+└── manifest.json
+```
+
+Each record includes `sample_id`, `image_id`, dataset/split/task information,
+the question, optional hint and choices, labels when available, category, and
+preserved source metadata. `sample_id` is always unique; `image_id` may repeat
+where several questions belong to the same image, as required by MME pair
+scoring. Runtime helpers build Qwen messages and supervised targets without
+persisting model-specific special tokens.
+
+The initial leakage-safe split policy is recorded in `configs/data_v1.yaml`:
+
+- train on GQA balanced train;
+- tune on GQA balanced val;
+- evaluate on GQA balanced testdev, MMBench validation, and MME test;
+- use GQA test and MMBench test for inference/submission only.
+
 ## Run the full-token baseline
 
 After the relevant dataset has been downloaded, run a small smoke subset first:
@@ -130,15 +195,28 @@ uv run python scripts/run_baseline.py `
   --limit 10
 ```
 
-Other configured sources are `mmb_test` and `gqa_val_balanced`. The GQA source
-joins the balanced instructions and balanced images by the configured image
-key. Results are written to `outputs/baseline/<dataset>.jsonl` and include the
+Other configured sources are `mmb_validation`, `mmb_test`,
+`gqa_val_balanced`, and `gqa_testdev_balanced`. All sources consume the
+processed schema. Results are written to `outputs/baseline/<dataset>.jsonl` and include the
 prediction, reference answers, exact-match when available, latency, input and
 output token counts, and peak VRAM when CUDA is available.
 
 The baseline uses the standard Qwen3-VL Transformers path: an
 `AutoProcessor`, `Qwen3VLForConditionalGeneration`, `apply_chat_template`, and
 `generate`. It keeps all visual tokens and records `pruning_method: "none"`.
+
+Score a completed prediction file separately from generation:
+
+```powershell
+uv run python scripts/evaluate_predictions.py `
+  outputs/baseline/mme_test.jsonl `
+  --output data/metrics/mme_test.json
+```
+
+GQA uses normalized short-answer accuracy, MMBench parses and scores A-D/E
+labels, and MME reports question accuracy plus category-level pair accuracy
+(`accuracy+`) and the conventional combined MME score. Unlabelled inference
+files report no accuracy rather than treating missing labels as incorrect.
 
 ## Research extension path
 
@@ -158,7 +236,7 @@ assuming which of these methods will become the thesis contribution.
 
 ## Current validation policy
 
-The repository setup does not download datasets or model weights automatically.
-Use the commands above explicitly when ready. At this stage, validation should
-focus on configuration, import/syntax checks, and small smoke subsets before
-any full benchmark run.
+The repository setup does not download datasets, preprocess full corpora, or
+download model weights automatically. Use the commands above explicitly when
+ready. Run unit tests with `uv run pytest`, then use small preprocessing and
+baseline smoke subsets before a complete benchmark.

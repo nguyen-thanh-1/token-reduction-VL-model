@@ -10,6 +10,7 @@ from PIL import Image
 
 from token_reduction_vl.data.download import (
     GQA_BALANCED_REQUESTS,
+    MMB_REQUESTS,
     DatasetRequest,
     _download_request,
     _load_legacy_dataset,
@@ -30,6 +31,10 @@ def test_gqa_requests_are_balanced_and_use_plural_val_images() -> None:
     assert "val_balanced_images" in configs
     assert "val_balanced_image" not in configs
     assert all("_all_" not in config for config in configs)
+
+
+def test_mmb_requests_include_labelled_validation_and_unlabelled_test() -> None:
+    assert {request.split for request in MMB_REQUESTS} == {"validation", "test"}
 
 
 def test_export_writes_real_image_and_relative_jsonl_path(tmp_path) -> None:
