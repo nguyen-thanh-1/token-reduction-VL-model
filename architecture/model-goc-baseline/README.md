@@ -3,7 +3,9 @@
 This directory documents the full-token `Qwen/Qwen3-VL-2B-Instruct` baseline
 used by the project.
 
-- Editable source: `qwen3-vl-2b-instruct-baseline.drawio`
+- Multi-page editable source: `qwen3-vl-2b-instruct-baseline.drawio`
+- Single-page editable source:
+  `qwen3-vl-2b-instruct-single-page-full-architecture.drawio`
 - Image exports: `exports/`
 - Hugging Face snapshot inspected:
   `89644892e4d85e24eaac8bacfd4f463576704203`
@@ -26,6 +28,16 @@ The Draw.io file contains five pages:
 5. **Decoder architecture** — the complete 28-layer path, DeepStack injection
    after decoder layers 0/1/2, the internal attention and SwiGLU sublayers,
    residual connections, KV cache, and autoregressive generation.
+
+The single-page Draw.io file combines those views into one 6000×2460 landscape
+canvas. Its top row follows the complete executable path from image/question
+input through processing, the 24-layer ViT, fixed DeepStack feature streams,
+masked-scatter token fusion, all 28 language layers, the tied LM head,
+autoregressive decoding, and benchmark evaluation. The lower rows expand one
+VisionBlock, the final/DeepStack PatchMergers, one language decoder block, and
+an end-to-end tensor ledger. It explicitly tracks `Npatch`, `Nvisual`,
+`Ntext_and_special`, `Ntotal`, hidden widths, vocabulary logits, and where the
+three DeepStack tensors are added without changing sequence length.
 
 The baseline retains every visual token produced by the built-in spatial patch
 merger. The built-in merger is documented separately from future experimental

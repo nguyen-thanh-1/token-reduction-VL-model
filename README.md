@@ -100,6 +100,7 @@ Editable network diagrams live under `architecture/`, with one directory per
 baseline or pruning method. The current full-token model is documented in:
 
 - `architecture/model-goc-baseline/qwen3-vl-2b-instruct-baseline.drawio`
+- `architecture/model-goc-baseline/qwen3-vl-2b-instruct-single-page-full-architecture.drawio`
 - `architecture/model-goc-baseline/README.md`
 
 The Draw.io source has five pages:
@@ -121,6 +122,10 @@ every visual token emitted by the built-in 2×2 PatchMerger.
 
 Export PNG, SVG, or PDF versions into the adjacent `exports/` directory so
 each architecture version remains self-contained.
+
+Use the five-page file for focused module inspection. Use the 6000×2460
+single-page file when tracing the complete tensor/token path or deciding where
+to insert and measure a pruning experiment.
 
 ## Environment setup
 
