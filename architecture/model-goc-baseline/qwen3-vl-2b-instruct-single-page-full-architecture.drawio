@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="single-page-full" name="Qwen3-VL full architecture">
-        <mxGraphModel dx="5304" dy="3136" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="6000" pageHeight="2460" background="#ffffff" math="0" shadow="0">
+        <mxGraphModel dx="1164" dy="747" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="6000" pageHeight="2460" background="#ffffff" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -396,8 +396,8 @@
                 <mxCell id="e-embed-scatter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="token-embed" target="masked-scatter" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="2975" y="318"/>
-                            <mxPoint x="2975" y="515"/>
+                            <mxPoint x="2975" y="317"/>
+                            <mxPoint x="2975" y="500"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
