@@ -68,12 +68,17 @@ GQA_BALANCED_REQUESTS: tuple[DatasetRequest, ...] = tuple(
     )
 )
 
-MMB_REQUEST = DatasetRequest(
-    repository="HuggingFaceM4/MMBench",
-    config="default",
-    split="test",
-    output_subdir=Path("MMB") / "test",
+MMB_REQUESTS: tuple[DatasetRequest, ...] = tuple(
+    DatasetRequest(
+        repository="HuggingFaceM4/MMBench",
+        config="default",
+        split=split,
+        output_subdir=Path("MMB") / split,
+    )
+    for split in ("validation", "test")
 )
+# Kept as a compatibility alias for callers that imported the original test request.
+MMB_REQUEST = MMB_REQUESTS[1]
 
 MME_REQUEST = DatasetRequest(
     repository="lmms-lab-encoder/MME",
@@ -233,6 +238,7 @@ def export_dataset_files(
         "records": RECORDS_FILENAME,
         "image_directory": "images" if has_image else None,
         "storage_format": "files-v1",
+        "dataset_fingerprint": getattr(source, "_fingerprint", None),
     }
     temporary_manifest = output_dir / f".{MANIFEST_FILENAME}.tmp"
     temporary_manifest.write_text(
@@ -308,10 +314,10 @@ def _requests_for(dataset_name: str) -> Sequence[DatasetRequest]:
     if dataset_name == "gqa":
         return GQA_BALANCED_REQUESTS
     if dataset_name == "mmb":
-        return (MMB_REQUEST,)
+        return MMB_REQUESTS
     if dataset_name == "mme":
         return (MME_REQUEST,)
-    return (*GQA_BALANCED_REQUESTS, MMB_REQUEST, MME_REQUEST)
+    return (*GQA_BALANCED_REQUESTS, *MMB_REQUESTS, MME_REQUEST)
 
 
 def parse_args() -> argparse.Namespace:

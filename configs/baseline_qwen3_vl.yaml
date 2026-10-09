@@ -17,24 +17,21 @@ run:
 data:
   sources:
     mme_test:
-      kind: single
-      path: data/raw/MME/test
-      image_fields: [image]
-      question_fields: [question]
-      answer_fields: [answer]
+      kind: canonical
+      path: data/processed/v1/mme/test.jsonl
+
+    mmb_validation:
+      kind: canonical
+      path: data/processed/v1/mmbench/validation.jsonl
 
     mmb_test:
-      kind: single
-      path: data/raw/MMB/test
-      image_fields: [image]
-      question_fields: [question]
-      answer_fields: [answer, label]
+      kind: canonical
+      path: data/processed/v1/mmbench/test.jsonl
 
     gqa_val_balanced:
-      kind: paired
-      instructions: data/raw/GQA/val_balanced_instructions
-      images: data/raw/GQA/val_balanced_images
-      join_key_fields: [image_id, imageId, id]
-      image_fields: [image]
-      question_fields: [question, instruction]
-      answer_fields: [answer, label]
+      kind: canonical
+      path: data/processed/v1/gqa/val.jsonl
+
+    gqa_testdev_balanced:
+      kind: canonical
+      path: data/processed/v1/gqa/testdev.jsonl

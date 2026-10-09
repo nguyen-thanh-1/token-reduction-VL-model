@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from .canonical import iter_canonical_samples
 from .samples import (
     DEFAULT_ANSWER_FIELDS,
     DEFAULT_ID_FIELDS,
@@ -39,6 +40,10 @@ def iter_source_samples(
         "id_fields": _fields(source, "id_fields", DEFAULT_ID_FIELDS),
     }
     kind = source.get("kind", "single")
+    if kind == "canonical":
+        return iter_canonical_samples(
+            _resolve_path(project_root, source["path"]), project_root=project_root
+        )
     if kind == "single":
         return iter_single_samples(_resolve_path(project_root, source["path"]), **common)
     if kind == "paired":

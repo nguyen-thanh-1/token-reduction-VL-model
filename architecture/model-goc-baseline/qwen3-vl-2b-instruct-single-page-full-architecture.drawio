@@ -1,0 +1,601 @@
+<mxfile host="65bd71144e">
+    <diagram id="single-page-full" name="Qwen3-VL full architecture">
+        <mxGraphModel dx="1164" dy="747" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="6000" pageHeight="2460" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;b&gt;Qwen3-VL-2B-Instruct — COMPLETE SINGLE-PAGE FULL-TOKEN BASELINE ARCHITECTURE&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=28;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="5920" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="meta" value="HF snapshot 89644892e4d85e24eaac8bacfd4f463576704203  •  Transformers 5.19.0  •  BF16/auto  •  greedy decoding  •  max_new_tokens=32  •  full-token baseline: pruning_method=none" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#9CA3AF;fontSize=14;align=center;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="90" width="5640" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="input-bg" value="&lt;b&gt;1. INPUT + PROCESSOR&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=12;fillColor=#EAF2FF;strokeColor=#6C8EBF;fontSize=17;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="170" width="650" height="1000" as="geometry"/>
+                </mxCell>
+                <mxCell id="vision-bg" value="&lt;b&gt;2. VISION ENCODER — MAIN STREAM + FIXED DEEPSTACK TAPS&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=12;fillColor=#EAF4E5;strokeColor=#82B366;fontSize=17;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="730" y="170" width="1700" height="1000" as="geometry"/>
+                </mxCell>
+                <mxCell id="fusion-bg" value="&lt;b&gt;3. MULTIMODAL TOKEN FUSION&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=12;fillColor=#F3E8F7;strokeColor=#9673A6;fontSize=17;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2470" y="170" width="1050" height="1000" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-bg" value="&lt;b&gt;4. LANGUAGE DECODER — 28 DECODER-ONLY TRANSFORMER LAYERS&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=12;fillColor=#FFF4E6;strokeColor=#D79B00;fontSize=17;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3560" y="170" width="1780" height="1000" as="geometry"/>
+                </mxCell>
+                <mxCell id="output-bg" value="&lt;b&gt;5. OUTPUT + EVALUATION&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=12;fillColor=#F3F4F6;strokeColor=#6B7280;fontSize=17;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5380" y="170" width="580" height="1000" as="geometry"/>
+                </mxCell>
+                <mxCell id="image-input" value="&lt;b&gt;RGB image&lt;/b&gt;&#10;dynamic H × W × 3&#10;GQA / MMBench / MME" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="250" width="250" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-input" value="&lt;b&gt;Question / instruction&lt;/b&gt;&#10;optional context + choices&#10;answer-format instruction" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="250" width="250" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="image-processor" value="&lt;b&gt;Image processor&lt;/b&gt;&#10;RGB conversion&#10;dynamic resize + normalize&#10;build image_grid_thw" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="420" width="250" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat-tokenizer" value="&lt;b&gt;Chat template + tokenizer&lt;/b&gt;&#10;system/user content&#10;&amp;lt;vision_start&amp;gt; image placeholders &amp;lt;vision_end&amp;gt;&#10;assistant-generation prefix" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="420" width="250" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="pixel-output" value="&lt;b&gt;Processor image outputs&lt;/b&gt;&#10;pixel_values&#10;image_grid_thw = (Tgrid,Hgrid,Wgrid)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="625" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="ids-output" value="&lt;b&gt;Processor text outputs&lt;/b&gt;&#10;input_ids [B,Ntotal]&#10;attention_mask [B,Ntotal]&#10;image token ID = 151655" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="625" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="placeholder-count" value="&lt;b&gt;Image-placeholder expansion&lt;/b&gt;&#10;Nvisual = (Tgrid × Hgrid × Wgrid) / 2²&#10;the processor inserts exactly Nvisual &amp;lt;image_pad&amp;gt; positions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="805" width="550" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="input-note" value="&lt;b&gt;One sequence is prepared before fusion&lt;/b&gt;&#10;Ntotal = Ntext_and_special + Nvisual. The placeholder indexes are reserved for image vectors; they are not additional tokens appended after tokenization." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6C8EBF;fontSize=14;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="90" y="975" width="550" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="conv3d" value="&lt;b&gt;Conv3D patch embedding&lt;/b&gt;&#10;kernel = stride = (2,16,16)&#10;3 channels → hidden 1024&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="250" width="240" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="vision-pos" value="&lt;b&gt;Vision position encoding&lt;/b&gt;&#10;learned table + interpolation&#10;2D rotary position IDs&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="250" width="240" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="vit1" value="&lt;b&gt;ViT blocks 1–6&lt;/b&gt;&#10;indexes 0–5&#10;6 × VisionBlock&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1340" y="250" width="230" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="vit2" value="&lt;b&gt;ViT blocks 7–12&lt;/b&gt;&#10;indexes 6–11&#10;6 × VisionBlock&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1610" y="250" width="230" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="vit3" value="&lt;b&gt;ViT blocks 13–18&lt;/b&gt;&#10;indexes 12–17&#10;6 × VisionBlock&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="250" width="230" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="vit4" value="&lt;b&gt;ViT blocks 19–24&lt;/b&gt;&#10;indexes 18–23&#10;6 × VisionBlock&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2150" y="250" width="220" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-merge1" value="&lt;b&gt;DeepStack merger #1&lt;/b&gt;&#10;tap index 5 = after block 6&#10;group 2×2: 4096-D&#10;post-group LN → MLP → 2048" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1340" y="485" width="230" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-merge2" value="&lt;b&gt;DeepStack merger #2&lt;/b&gt;&#10;tap index 11 = after block 12&#10;group 2×2: 4096-D&#10;post-group LN → MLP → 2048" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1610" y="485" width="230" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-merge3" value="&lt;b&gt;DeepStack merger #3&lt;/b&gt;&#10;tap index 17 = after block 18&#10;group 2×2: 4096-D&#10;post-group LN → MLP → 2048" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="485" width="230" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="final-merger" value="&lt;b&gt;Final 2×2 PatchMerger&lt;/b&gt;&#10;LN(1024) before grouping&#10;4 × 1024 → 4096&#10;MLP 4096 → 4096 → 2048" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2150" y="485" width="220" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-feature1" value="DeepStack feature #1&#10;[Nvisual,2048]&#10;Nvisual = Npatch / 4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1340" y="690" width="230" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-feature2" value="DeepStack feature #2&#10;[Nvisual,2048]&#10;Nvisual = Npatch / 4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1610" y="690" width="230" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="ds-feature3" value="DeepStack feature #3&#10;[Nvisual,2048]&#10;Nvisual = Npatch / 4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="690" width="230" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="visual-embeds" value="&lt;b&gt;Main visual embeddings&lt;/b&gt;&#10;[Nvisual,2048]&#10;all 24 ViT blocks executed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2150" y="690" width="220" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="vision-contract" value="&lt;b&gt;Baseline contract&lt;/b&gt;&#10;The main stream always executes all 24 ViT blocks. DeepStack taps fixed intermediate hidden states and projects them to the same Nvisual × 2048 shape. It does not select layers dynamically and does not remove or append tokens." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=14;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="880" width="1590" height="165" as="geometry"/>
+                </mxCell>
+                <mxCell id="token-embed" value="&lt;b&gt;Token embedding table&lt;/b&gt;&#10;vocabulary 151,936&#10;lookup(input_ids)&#10;[B,Ntotal,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2520" y="250" width="430" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="visual-input-fusion" value="&lt;b&gt;Visual input to fusion&lt;/b&gt;&#10;image_embeds = vision pooler output&#10;[Nvisual,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3010" y="250" width="430" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="image-mask" value="&lt;b&gt;Find and validate image slots&lt;/b&gt;&#10;image_mask = input_ids == 151655&#10;count(mask) must equal Nvisual&#10;shape [B,Ntotal]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2520" y="445" width="430" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="masked-scatter" value="&lt;b&gt;In-place masked_scatter&lt;/b&gt;&#10;inputs_embeds[image_mask] ← image_embeds&#10;placeholder indexes stay fixed&#10;only their 2048-D vectors are replaced" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3010" y="445" width="430" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="joint-strip" value="&lt;b&gt;Joint sequence after replacement&lt;/b&gt;&#10;&lt;font color=&quot;#4A86E8&quot;&gt;[text] [vision_start]&lt;/font&gt;　&lt;font color=&quot;#6AA84F&quot;&gt;[V1] [V2] … [VNvisual]&lt;/font&gt;　&lt;font color=&quot;#4A86E8&quot;&gt;[vision_end] [question] [assistant]&lt;/font&gt;&#10;Ntotal = Ntext_and_special + Nvisual　•　hidden tensor [B,Ntotal,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2520" y="650" width="920" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="mrope" value="&lt;b&gt;Multimodal position IDs&lt;/b&gt;&#10;shape [3,B,Ntotal] = rows T/H/W&#10;text: sequential index repeated in all rows&#10;image: merged-grid temporal/height/width coordinates&#10;M-RoPE sections [24,20,20], θ=5,000,000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9673A6;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2520" y="860" width="430" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="joint-ready" value="&lt;b&gt;Decoder-ready multimodal input&lt;/b&gt;&#10;inputs_embeds [B,Ntotal,2048]&#10;position_ids [3,B,Ntotal]&#10;attention_mask [B,Ntotal]&#10;Ntotal is the recorded input_tokens value" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3010" y="860" width="430" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-input" value="&lt;b&gt;Joint hidden states&lt;/b&gt;&#10;[B,Ntotal,2048]&#10;text + visual positions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3600" y="350" width="180" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="dec-layer0" value="&lt;b&gt;Layer 0&lt;/b&gt;&#10;pre-norm GQA&#10;+ SwiGLU MLP&#10;[B,N,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3820" y="350" width="180" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="add-ds1" value="+" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=24;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4020" y="382" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="dec-layer1" value="&lt;b&gt;Layer 1&lt;/b&gt;&#10;pre-norm GQA&#10;+ SwiGLU MLP&#10;[B,N,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4090" y="350" width="180" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="add-ds2" value="+" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=24;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4290" y="382" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="dec-layer2" value="&lt;b&gt;Layer 2&lt;/b&gt;&#10;pre-norm GQA&#10;+ SwiGLU MLP&#10;[B,N,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4360" y="350" width="180" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="add-ds3" value="+" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=24;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4560" y="382" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="dec-layers3-27" value="&lt;b&gt;Layers 3–27&lt;/b&gt;&#10;25 identical decoder blocks&#10;no more DeepStack additions&#10;[B,N,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4630" y="350" width="230" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="final-rms" value="&lt;b&gt;Final RMSNorm&lt;/b&gt;&#10;hidden 2048&#10;ε=1e−6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4890" y="350" width="160" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="lm-head" value="&lt;b&gt;Tied LM head&lt;/b&gt;&#10;2048 → 151,936&#10;shares embedding weights" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5080" y="350" width="210" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-ds1" value="DeepStack #1&#10;[Nvisual,2048]&#10;add only at image_mask positions&#10;after decoder layer 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3915" y="210" width="260" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-ds2" value="DeepStack #2&#10;[Nvisual,2048]&#10;add only at image_mask positions&#10;after decoder layer 1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4205" y="210" width="260" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-ds3" value="DeepStack #3&#10;[Nvisual,2048]&#10;add only at image_mask positions&#10;after decoder layer 2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4495" y="210" width="260" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-config" value="&lt;b&gt;Each of 28 layers&lt;/b&gt;&#10;hidden=2048 • 16 Q heads • 8 KV heads • head_dim=128&#10;pre-RMSNorm • causal grouped-query attention • M-RoPE • SwiGLU 2048→6144→2048 • two residual paths" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3600" y="570" width="1690" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="kv-cache" value="&lt;b&gt;KV cache per layer&lt;/b&gt;&#10;stores K/V for all processed text + visual positions&#10;avoids recomputing previous positions during decoding" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3600" y="750" width="480" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="prefill-decode" value="&lt;b&gt;Prefill vs. decode&lt;/b&gt;&#10;Prefill: process all Ntotal mixed positions together.&#10;Decode step s: append one generated text token; input length becomes Ntotal+s while original visual positions remain fixed." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4120" y="750" width="570" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-contract" value="&lt;b&gt;Sequence-length contract&lt;/b&gt;&#10;All 28 layers preserve N and hidden width 2048. DeepStack is an element-wise residual add at existing visual positions. It does not change Nvisual or Ntotal." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4730" y="750" width="560" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="logits" value="&lt;b&gt;Vocabulary logits&lt;/b&gt;&#10;prefill: [B,N,151936]&#10;decode: use final position" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5420" y="260" width="500" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="next-token" value="&lt;b&gt;Greedy next-token selection&lt;/b&gt;&#10;argmax over 151,936 tokens&#10;do_sample=false" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5420" y="435" width="500" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="append-token" value="&lt;b&gt;Append generated text token&lt;/b&gt;&#10;update per-layer KV cache&#10;repeat until EOS or 32 tokens" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5420" y="610" width="500" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoded-answer" value="&lt;b&gt;Decoded answer&lt;/b&gt;&#10;short phrase / option letter / yes-no&#10;output_tokens = generated length" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5420" y="785" width="500" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="evaluation" value="&lt;b&gt;Dataset-specific evaluation&lt;/b&gt;&#10;GQA: normalized short-answer accuracy&#10;MMBench: parsed A–E option accuracy&#10;MME: yes/no accuracy + pair Accuracy+ + total score&#10;&#10;Efficiency: latency • tokens • peak VRAM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5420" y="960" width="500" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="vit-detail-bg" value="&lt;b&gt;A. INTERNAL VISIONBLOCK + PATCHMERGER DETAIL&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=10;fillColor=#F4FAF1;strokeColor=#82B366;fontSize=16;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1210" width="2380" height="535" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-in" value="xℓ&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1325" width="150" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-ln1" value="LayerNorm&#10;1024, ε=1e−6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="270" y="1325" width="155" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-attn" value="&lt;b&gt;Vision self-attention&lt;/b&gt;&#10;16 heads × 64-D&#10;QKV: 1024→3072&#10;2D rotary positions&#10;O: 1024→1024" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="465" y="1305" width="270" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-res1" value="Residual #1&#10;x′ = xℓ + Attn" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="775" y="1325" width="175" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-ln2" value="LayerNorm&#10;1024, ε=1e−6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="1325" width="155" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-mlp" value="&lt;b&gt;Vision MLP&lt;/b&gt;&#10;fc1 1024→4096&#10;GELU&#10;fc2 4096→1024" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1185" y="1305" width="240" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="vb-res2" value="Residual #2&#10;xℓ+1 = x′ + MLP&#10;[Npatch,1024]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1465" y="1315" width="190" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="merger-detail" value="&lt;b&gt;Final PatchMerger&lt;/b&gt;&#10;LN each 1024-D patch → group each spatial 2×2 neighborhood&#10;concatenate 4 patches: 4×1024 = 4096&#10;Linear 4096→4096 → GELU → Linear 4096→2048&#10;[Npatch,1024] → [Npatch/4,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#82B366;fontSize=12;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1700" y="1285" width="660" height="165" as="geometry"/>
+                </mxCell>
+                <mxCell id="vision-residual-note" value="Both residual paths preserve the patch-token count Npatch and hidden width 1024 inside every ViT block. The built-in 2×2 PatchMerger is the only baseline operation that reduces the spatial token count, deterministically by 4." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B7B7B7;fontSize=13;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1505" width="850" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="deepstack-merger-note" value="&lt;b&gt;DeepStack merger difference&lt;/b&gt;&#10;The three DeepStack branches group the same 2×2 patches first, then apply LayerNorm over the grouped 4096-D representation before the same 4096→4096→2048 MLP. Each branch therefore emits [Nvisual,2048]." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="980" y="1505" width="1380" height="145" as="geometry"/>
+                </mxCell>
+                <mxCell id="decoder-detail-bg" value="&lt;b&gt;B. INTERNAL STRUCTURE OF ONE PRE-NORM LANGUAGE DECODER LAYER — REPEATED 28 TIMES&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=10;fillColor=#FFF9ED;strokeColor=#D79B00;fontSize=16;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2470" y="1210" width="3490" height="535" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-in" value="xℓ&#10;[B,N,2048]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2510" y="1330" width="150" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-norm1" value="RMSNorm&#10;2048, ε=1e−6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2690" y="1330" width="155" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-qkv" value="&lt;b&gt;Bias-free Q/K/V&lt;/b&gt;&#10;Q 2048→2048 = 16×128&#10;Q shape [B,16,N,128]&#10;K,V 2048→1024 = 8×128&#10;K,V shape [B,8,N,128]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2875" y="1305" width="270" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-qknorm" value="&lt;b&gt;Per-head Q/K RMSNorm&lt;/b&gt;&#10;+ M-RoPE on Q,K&#10;position IDs T/H/W&#10;sections [24,20,20]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3175" y="1305" width="270" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-attn" value="&lt;b&gt;Causal grouped-query attention&lt;/b&gt;&#10;16 Q heads / 8 KV heads&#10;each KV head shared by 2 Q heads&#10;causal mask + KV cache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3475" y="1305" width="300" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-oproj" value="&lt;b&gt;o_proj + residual #1&lt;/b&gt;&#10;concat heads = 2048&#10;Linear 2048→2048&#10;x′ = xℓ + Attention" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3805" y="1305" width="255" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-norm2" value="RMSNorm&#10;2048, ε=1e−6" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4090" y="1330" width="155" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-gateup" value="&lt;b&gt;Bias-free parallel projections&lt;/b&gt;&#10;gate_proj 2048→6144&#10;up_proj 2048→6144" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4275" y="1315" width="270" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-swiglu" value="&lt;b&gt;SwiGLU&lt;/b&gt;&#10;SiLU(gate) ⊙ up&#10;[B,N,6144]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4575" y="1325" width="200" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-down" value="&lt;b&gt;down_proj + residual #2&lt;/b&gt;&#10;Linear 6144→2048&#10;xℓ+1 = x′ + MLP(RMSNorm(x′))" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4805" y="1315" width="300" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-out" value="xℓ+1&#10;[B,N,2048]&#10;N unchanged" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5135" y="1320" width="170" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-joint-note" value="&lt;b&gt;One decoder for both modalities&lt;/b&gt;&#10;After fusion, text and image vectors occupy positions in the same sequence. The decoder does not contain a separate image-only branch; causal self-attention mixes information over all allowed previous positions." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;fontSize=12;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5335" y="1285" width="575" height="165" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-residual-note" value="Residual path 1 bypasses attention; residual path 2 bypasses the MLP. Both preserve [B,N,2048]. DeepStack additions occur only after complete decoder layers 0, 1, and 2—not inside the attention or MLP sublayers." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B7B7B7;fontSize=13;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2510" y="1510" width="1580" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-cache-note" value="&lt;b&gt;KV-cache dimensions per layer&lt;/b&gt;&#10;K and V cache shape: [B,8,Ncached,128]. Visual and prompt tokens are cached during prefill; each decode step computes Q/K/V only for the newly appended text token." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4130" y="1510" width="850" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-pruning-note" value="&lt;b&gt;Future experimental hook points&lt;/b&gt;&#10;Candidate interventions may operate on visual embeddings before fusion or on selected decoder stages. Every experiment must state token budget, layer, scoring signal, and spatial safeguard; this diagram itself remains the unpruned reference." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;align=left;spacingLeft=12;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="5020" y="1510" width="890" height="135" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-bg" value="&lt;b&gt;C. END-TO-END TOKEN / TENSOR LEDGER AND EXPERIMENT CONTRACT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;spacingTop=10;fillColor=#F7F7F9;strokeColor=#6B7280;fontSize=16;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1785" width="5920" height="625" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-image" value="&lt;b&gt;① Image patches&lt;/b&gt;&#10;pixel_values + grid_thw&#10;Conv3D → [Npatch,1024]&#10;Npatch=Tgrid×Hgrid×Wgrid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1870" width="930" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-visual" value="&lt;b&gt;② Merged visual tokens&lt;/b&gt;&#10;final PatchMerger&#10;[Nvisual,2048]&#10;Nvisual=Npatch/4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1050" y="1870" width="930" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-text" value="&lt;b&gt;③ Tokenized prompt&lt;/b&gt;&#10;Ntext_and_special non-image positions&#10;+ Nvisual placeholders&#10;input_ids [B,Ntotal]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E8FB;strokeColor=#6C8EBF;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2020" y="1870" width="930" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-fused" value="&lt;b&gt;④ Fused multimodal sequence&lt;/b&gt;&#10;Nvisual placeholder vectors replaced in-place&#10;[B,Ntotal,2048]&#10;Ntotal=Ntext_and_special+Nvisual" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="2990" y="1870" width="930" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-decoder" value="&lt;b&gt;⑤ Decoder + logits&lt;/b&gt;&#10;28 layers preserve [B,Ntotal,2048]&#10;final logits [B,Ntotal,151936]&#10;DeepStack additions preserve Ntotal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3960" y="1870" width="930" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger-generation" value="&lt;b&gt;⑥ Autoregressive text output&lt;/b&gt;&#10;step s input length = Ntotal+s&#10;one new text token per step&#10;answer ≤32 generated tokens" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6B7280;fontSize=13;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4930" y="1870" width="970" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="token-definitions" value="&lt;b&gt;Token definitions used in experiments&lt;/b&gt;&#10;• Npatch: unmerged ViT patch tokens.&#10;• Nvisual: tokens after the built-in 2×2 merger; this is the baseline visual-token count.&#10;• Ntext_and_special: all non-image-placeholder text/control positions.&#10;• Ntotal: decoder prefill length and recorded input_tokens.&#10;• retained_visual_ratio = Nvisual_after_experimental_pruning / Nvisual_baseline." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="2050" width="1420" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="deepstack-contract-bottom" value="&lt;b&gt;DeepStack shape contract&lt;/b&gt;&#10;Three fixed feature tensors, each [Nvisual,2048], are injected after language layers 0, 1, and 2 only at image_mask positions. They reuse intermediate visual features but neither create new token positions nor reduce the sequence length." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="1540" y="2050" width="1420" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="baseline-contract-bottom" value="&lt;b&gt;Full-token baseline contract&lt;/b&gt;&#10;No learned, random, attention-based, question-aware, or adaptive token pruning is applied. The only token-count reduction is Qwen3-VL's built-in deterministic 2×2 PatchMerger. Future methods must compare against this exact path and model revision." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="3000" y="2050" width="1420" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="experiment-contract" value="&lt;b&gt;Required comparison axes&lt;/b&gt;&#10;&lt;font color=&quot;#067647&quot;&gt;Quality:&lt;/font&gt; GQA accuracy • MMBench accuracy • MME accuracy, Accuracy+, total score.&#10;&lt;font color=&quot;#2855D9&quot;&gt;Efficiency:&lt;/font&gt; retained visual-token ratio • latency • throughput • peak VRAM • FLOPs/compute proxy.&#10;&lt;font color=&quot;#9C2C77&quot;&gt;Controls:&lt;/font&gt; full-token • random-K • uniform-K • question-aware fixed-K." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;fontSize=13;align=left;spacingLeft=14;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="4460" y="2050" width="1440" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="&lt;font color=&quot;#4A86E8&quot;&gt;━━ Text/control path&lt;/font&gt;　 &lt;font color=&quot;#6AA84F&quot;&gt;━━ Main visual path&lt;/font&gt;　 &lt;font color=&quot;#BF9000&quot;&gt;┄┄ DeepStack feature injection&lt;/font&gt;　 &lt;font color=&quot;#8E7CC3&quot;&gt;━━ Fusion/joint sequence&lt;/font&gt;　 &lt;font color=&quot;#D79B00&quot;&gt;━━ Decoder/generation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B7B7B7;fontSize=14;align=center;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="2305" width="4800" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-image-proc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="image-input" target="image-processor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-text-proc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="text-input" target="chat-tokenizer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-proc-pixel" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="image-processor" target="pixel-output" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-proc-ids" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="chat-tokenizer" target="ids-output" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-grid-count" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="pixel-output" target="placeholder-count" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ids-count" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ids-output" target="placeholder-count" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-pixel-conv" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="pixel-output" target="conv3d" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="20" y="700"/>
+                            <mxPoint x="20" y="160"/>
+                            <mxPoint x="710" y="160"/>
+                            <mxPoint x="710" y="315"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-conv-pos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="conv3d" target="vision-pos" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-pos-v1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vision-pos" target="vit1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v1-v2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vit1" target="vit2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v2-v3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vit2" target="vit3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v3-v4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vit3" target="vit4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v4-final" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vit4" target="final-merger" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v1-ds1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="vit1" target="ds-merge1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v2-ds2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="vit2" target="ds-merge2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-v3-ds3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="vit3" target="ds-merge3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dsm1-f1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-merge1" target="ds-feature1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dsm2-f2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-merge2" target="ds-feature2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dsm3-f3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-merge3" target="ds-feature3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-final-visual" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="final-merger" target="visual-embeds" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ids-embed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ids-output" target="token-embed" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="720" y="660"/>
+                            <mxPoint x="720" y="160"/>
+                            <mxPoint x="2735" y="160"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-ids-mask" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ids-output" target="image-mask" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="710" y="720"/>
+                            <mxPoint x="710" y="1180"/>
+                            <mxPoint x="2450" y="1180"/>
+                            <mxPoint x="2450" y="515"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-visual-fusion" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="visual-embeds" target="visual-input-fusion" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2390" y="738"/>
+                            <mxPoint x="2390" y="220"/>
+                            <mxPoint x="3225" y="220"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-embed-scatter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="token-embed" target="masked-scatter" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2975" y="317"/>
+                            <mxPoint x="2975" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-vin-scatter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="visual-input-fusion" target="masked-scatter" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-mask-scatter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="image-mask" target="masked-scatter" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-scatter-strip" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="masked-scatter" target="joint-strip" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-strip-mrope" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="joint-strip" target="mrope" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2735" y="825"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-strip-ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="joint-strip" target="joint-ready" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="3225" y="825"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-mrope-ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="mrope" target="joint-ready" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ready-decoder" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="joint-ready" target="decoder-input" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="3540" y="955"/>
+                            <mxPoint x="3540" y="408"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-dec0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="decoder-input" target="dec-layer0" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dec-add1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="dec-layer0" target="add-ds1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-add1-dec1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="add-ds1" target="dec-layer1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dec1-add2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="dec-layer1" target="add-ds2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-add2-dec2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="add-ds2" target="dec-layer2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dec2-add3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="dec-layer2" target="add-ds3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-add3-rest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="add-ds3" target="dec-layers3-27" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-rest-final" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="dec-layers3-27" target="final-rms" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-final-head" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="final-rms" target="lm-head" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-f1-dsi1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-feature1" target="decoder-ds1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1455" y="1060"/>
+                            <mxPoint x="3530" y="1060"/>
+                            <mxPoint x="3530" y="320"/>
+                            <mxPoint x="4045" y="320"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-f2-dsi2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-feature2" target="decoder-ds2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1725" y="1080"/>
+                            <mxPoint x="3540" y="1080"/>
+                            <mxPoint x="3540" y="330"/>
+                            <mxPoint x="4335" y="330"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-f3-dsi3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="ds-feature3" target="decoder-ds3" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1995" y="1100"/>
+                            <mxPoint x="3550" y="1100"/>
+                            <mxPoint x="3550" y="340"/>
+                            <mxPoint x="4625" y="340"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-dsi1-add" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="decoder-ds1" target="add-ds1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dsi2-add" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="decoder-ds2" target="add-ds2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-dsi3-add" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D6B656;strokeWidth=2;dashed=1;endArrow=block;endFill=1;" parent="1" source="decoder-ds3" target="add-ds3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-head-logits" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="lm-head" target="logits" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-logits-next" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6B7280;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="logits" target="next-token" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-next-append" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6B7280;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="next-token" target="append-token" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-append-answer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6B7280;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="append-token" target="decoded-answer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-answer-eval" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6B7280;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="decoded-answer" target="evaluation" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-generation-loop" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;dashed=1;endArrow=block;endFill=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="append-token" target="decoder-input" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="5360" y="667"/>
+                            <mxPoint x="5360" y="1190"/>
+                            <mxPoint x="3580" y="1190"/>
+                            <mxPoint x="3580" y="500"/>
+                            <mxPoint x="3690" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-vb1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-in" target="vb-ln1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-vb2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-ln1" target="vb-attn" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-vb3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-attn" target="vb-res1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-vb4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-res1" target="vb-ln2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-vb5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-ln2" target="vb-mlp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-vb6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="vb-mlp" target="vb-res2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-in" target="db-norm1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-norm1" target="db-qkv" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-qkv" target="db-qknorm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-qknorm" target="db-attn" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-attn" target="db-oproj" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-oproj" target="db-norm2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-norm2" target="db-gateup" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-gateup" target="db-swiglu" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-swiglu" target="db-down" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-db10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="db-down" target="db-out" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ledger1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ledger-image" target="ledger-visual" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ledger2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6C8EBF;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ledger-text" target="ledger-fused" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ledger3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;endArrow=block;endFill=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="ledger-visual" target="ledger-fused" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1515" y="2020"/>
+                            <mxPoint x="3455" y="2020"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-ledger4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D79B00;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ledger-fused" target="ledger-decoder" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-ledger5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6B7280;strokeWidth=2;endArrow=block;endFill=1;" parent="1" source="ledger-decoder" target="ledger-generation" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
