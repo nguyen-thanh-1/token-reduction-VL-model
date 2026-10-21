@@ -6,10 +6,14 @@ subdirectory so baseline and pruning designs are never mixed.
 
 ```text
 architecture/
-└── model-goc-baseline/
-    ├── Qwen3-VL-2B-Instruct-architecture.drawio
+├── model-goc-baseline/
+│   ├── Qwen3-VL-2B-Instruct-architecture.drawio
+│   ├── README.md
+│   └── exports/                      # PNG, SVG, or PDF exports
+└── dsfold-proposal/                  # proposed intervention, not implemented
+    ├── Qwen3-VL-2B-Instruct-DSFold-proposal.drawio
     ├── README.md
-    └── exports/                      # PNG, SVG, or PDF exports
+    └── exports/
 ```
 
 The baseline diagram is a single page that exposes the complete execution and

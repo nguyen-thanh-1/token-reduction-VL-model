@@ -2,8 +2,13 @@
 
 Thesis research codebase: adaptive visual-token pruning for vision-language
 models. A full-token Qwen3-VL-2B-Instruct baseline is measured on GQA, MMBench,
-and MME; no pruning method has been chosen yet. The user usually writes in
-Vietnamese; reply in Vietnamese, keep code and repo docs in English.
+and MME; no pruning method has been chosen yet. Always reply to the user in
+Vietnamese. Code, comments, and READMEs are in English; research/method docs
+written for the user under `docs/research/` may be in Vietnamese.
+
+Research goal: reduce the number of visual tokens fed to the LLM while keeping
+(or improving) answer quality relative to the full-token baseline. Target is a
+thesis, ideally publishable. See `docs/research/` for the current proposal.
 
 `AGENT.md` and `.agents/AGENT.md` are the shared agent guides (also used by
 other agents); this file adds Claude-specific routing. If they disagree, ask.
@@ -97,5 +102,8 @@ large edits or branch switches, run `codegraph sync`.
 
 The baseline diagram is the single-page
 `architecture/model-goc-baseline/Qwen3-VL-2B-Instruct-architecture.drawio`.
+The proposed DSFold intervention is drawn on a copy in
+`architecture/dsfold-proposal/` (red = new/changed, M#/P# badges); never edit
+the baseline diagram to show a proposal.
 When a diagram is added, renamed, or restructured, update `README.md`,
 `architecture/README.md`, and the per-model README together.

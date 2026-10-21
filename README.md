@@ -115,6 +115,10 @@ in five stages:
 The lower panels expand (A) one VisionBlock and the PatchMergers, (B) one
 pre-norm language decoder layer, and (C) an end-to-end token/tensor ledger.
 
+The proposed (not yet implemented) DSFold intervention is drawn on a copy of
+this diagram in `architecture/dsfold-proposal/`, and described in
+`docs/research/dsfold-method-proposal.md`.
+
 The diagram is checkpoint-specific, not copied from a generic larger Qwen3-VL
 diagram. For the inspected 2B checkpoint, the ViT hidden size is 1024, the
 language hidden size is 2048, and the fixed zero-based DeepStack visual indexes
