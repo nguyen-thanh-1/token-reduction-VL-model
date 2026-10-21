@@ -1,6 +1,6 @@
 ---
 name: huggingface-datasets
-description: Implement safe and reproducible downloads for the project datasets.
+description: Implement safe and reproducible downloads for the GQA, MMBench, and MME datasets. Use when editing the downloader, dataset sources, GQA configuration lists, or anything under data/raw.
 ---
 
 # Hugging Face datasets

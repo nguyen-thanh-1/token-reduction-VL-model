@@ -1,6 +1,6 @@
 ---
 name: vlm-research
-description: Guide VLM/VQA and visual-token research decisions for the pruning study.
+description: Guide VLM/VQA and visual-token research decisions for the pruning study. Use when designing, implementing, or evaluating a visual-token pruning method or interpreting baseline results.
 source: C:\Users\Admin\Desktop\ASkills\skills\computer-vision-expert\SKILL.md
 ---
 

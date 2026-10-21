@@ -16,7 +16,7 @@ The current code provides six connected components:
 3. Running ordinary full-token Qwen3-VL inference and benchmark-specific scoring.
 4. Generating quality/efficiency figures, tables, manifests, and an interactive
    incorrect-answer gallery.
-5. Documenting the verified checkpoint architecture in a five-page Draw.io file.
+5. Documenting the verified checkpoint architecture in a single-page Draw.io file.
 6. Providing a method-agnostic pruning interface for future Random-K,
    question-aware, adaptive-budget, diversity-aware, or spatial methods.
 
@@ -34,7 +34,7 @@ project setup or unit tests.
 | Full-token baseline | Completed | 19,281 predictions across three labelled benchmark splits |
 | Benchmark scoring | Completed | GQA, MMBench, and MME-specific metrics |
 | Visualization/reporting | Completed | Markdown report, JSON/CSV summaries, five figures, HTML failure gallery |
-| Architecture documentation | Completed for baseline | Five-page editable Draw.io model diagram |
+| Architecture documentation | Completed for baseline | Single-page editable Draw.io model diagram |
 | Token-pruning method | Not selected | Interface exists; experiments are the next phase |
 | Fine-tuning/training | Not implemented | To be designed after the pruning approach is selected |
 
@@ -99,19 +99,21 @@ inference. The canonical schema decision is documented in
 Editable network diagrams live under `architecture/`, with one directory per
 baseline or pruning method. The current full-token model is documented in:
 
-- `architecture/model-goc-baseline/qwen3-vl-2b-instruct-baseline.drawio`
-- `architecture/model-goc-baseline/qwen3-vl-2b-instruct-single-page-full-architecture.drawio`
+- `architecture/model-goc-baseline/Qwen3-VL-2B-Instruct-architecture.drawio`
 - `architecture/model-goc-baseline/README.md`
 
-The Draw.io source has five pages:
+The Draw.io source is a single page. Its top row follows the executable path
+in five stages:
 
-1. Clean end-to-end overview.
-2. Detailed 24-layer vision encoder, PatchMerger, and fixed DeepStack taps.
-3. Multimodal fusion and 28-layer decoder overview.
-4. Text/image token flow, placeholder replacement, token accounting, and
-   three-axis M-RoPE positions.
-5. Detailed decoder block, grouped-query attention, SwiGLU, residual paths,
-   DeepStack injection, KV cache, and autoregressive generation.
+1. Input and processor: prompt, Qwen chat template, image-placeholder
+   expansion, and tokenization.
+2. Vision encoder: the 24-layer ViT main stream and fixed DeepStack taps.
+3. Multimodal token fusion and three-axis M-RoPE positions.
+4. The 28-layer language decoder with DeepStack injection and KV cache.
+5. Output and benchmark-specific evaluation.
+
+The lower panels expand (A) one VisionBlock and the PatchMergers, (B) one
+pre-norm language decoder layer, and (C) an end-to-end token/tensor ledger.
 
 The diagram is checkpoint-specific, not copied from a generic larger Qwen3-VL
 diagram. For the inspected 2B checkpoint, the ViT hidden size is 1024, the
@@ -123,8 +125,7 @@ every visual token emitted by the built-in 2×2 PatchMerger.
 Export PNG, SVG, or PDF versions into the adjacent `exports/` directory so
 each architecture version remains self-contained.
 
-Use the five-page file for focused module inspection. Use the 6000×2460
-single-page file when tracing the complete tensor/token path or deciding where
+Use the diagram when tracing the complete tensor/token path or deciding where
 to insert and measure a pruning experiment.
 
 ## Environment setup

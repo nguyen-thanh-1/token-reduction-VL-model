@@ -7,15 +7,14 @@ subdirectory so baseline and pruning designs are never mixed.
 ```text
 architecture/
 └── model-goc-baseline/
-    ├── qwen3-vl-2b-instruct-baseline.drawio
-    ├── qwen3-vl-2b-instruct-single-page-full-architecture.drawio
+    ├── Qwen3-VL-2B-Instruct-architecture.drawio
     ├── README.md
     └── exports/                      # PNG, SVG, or PDF exports
 ```
 
-The baseline directory intentionally keeps both forms: the multi-page source
-is easier to read module by module, while the single-page source exposes the
-complete execution and token flow without page transitions.
+The baseline diagram is a single page that exposes the complete execution and
+token flow, with detail panels for the vision block, the decoder layer, and a
+token/tensor ledger.
 
 For future methods, create sibling directories such as `random-k/`,
 `uniform-k/`, or `adaptive-pruning/`. Keep the editable `.drawio` source beside

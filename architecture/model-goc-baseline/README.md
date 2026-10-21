@@ -3,39 +3,29 @@
 This directory documents the full-token `Qwen/Qwen3-VL-2B-Instruct` baseline
 used by the project.
 
-- Multi-page editable source: `qwen3-vl-2b-instruct-baseline.drawio`
-- Single-page editable source:
-  `qwen3-vl-2b-instruct-single-page-full-architecture.drawio`
+- Single-page editable source: `Qwen3-VL-2B-Instruct-architecture.drawio`
 - Image exports: `exports/`
 - Hugging Face snapshot inspected:
   `89644892e4d85e24eaac8bacfd4f463576704203`
 - Local Transformers implementation inspected: `5.19.0`
 - Runtime configuration: `configs/baseline_qwen3_vl.yaml`
 
-The Draw.io file contains five pages:
+The Draw.io file is one landscape page. Its top row follows the complete
+executable path in five numbered stages:
 
-1. **Clean overview** — a low-crossing, left-to-right view of input processing,
-   both encoder paths, multimodal fusion, decoding, and evaluation.
-2. **Vision encoder detail** — patch embedding, position encoding, all 24
-   Vision Transformer blocks, DeepStack taps, the internal VisionBlock, and
-   the 2×2 PatchMerger.
-3. **Fusion + decoder overview** — masked-scatter fusion, M-RoPE, all 28
-   decoder layers, three DeepStack additions, grouped-query attention, SwiGLU,
-   tied LM head, and generation.
-4. **Token flow and fusion** — expansion of image placeholders, text and image
-   embedding paths, exact visual-token counting, in-place replacement, the
-   resulting mixed token sequence, and multimodal position IDs.
-5. **Decoder architecture** — the complete 28-layer path, DeepStack injection
-   after decoder layers 0/1/2, the internal attention and SwiGLU sublayers,
-   residual connections, KV cache, and autoregressive generation.
+1. **Input + processor** — question/answer fields, the user message, the Qwen
+   chat template, image-placeholder expansion, and tokenization.
+2. **Vision encoder** — patch embedding, all 24 Vision Transformer blocks, the
+   main stream, and the fixed DeepStack taps.
+3. **Multimodal token fusion** — masked-scatter replacement of image
+   placeholders and multimodal position IDs for M-RoPE.
+4. **Language decoder** — all 28 decoder layers, DeepStack additions after
+   layers 0/1/2, the tied LM head, and the KV cache.
+5. **Output + evaluation** — greedy decoding and benchmark-specific scoring.
 
-The single-page Draw.io file combines those views into one 6000×2460 landscape
-canvas. Its top row follows the complete executable path from image/question
-input through processing, the 24-layer ViT, fixed DeepStack feature streams,
-masked-scatter token fusion, all 28 language layers, the tied LM head,
-autoregressive decoding, and benchmark evaluation. The lower rows expand one
-VisionBlock, the final/DeepStack PatchMergers, one language decoder block, and
-an end-to-end tensor ledger. It explicitly tracks `Npatch`, `Nvisual`,
+The lower panels expand (A) one VisionBlock with the final/DeepStack
+PatchMergers, (B) one pre-norm language decoder layer, and (C) an end-to-end
+token/tensor ledger and experiment contract. It explicitly tracks `Npatch`, `Nvisual`,
 `Ntext_and_special`, `Ntotal`, hidden widths, vocabulary logits, and where the
 three DeepStack tensors are added without changing sequence length.
 

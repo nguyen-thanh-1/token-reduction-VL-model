@@ -1,6 +1,6 @@
 ---
 name: model-memory-planning
-description: Estimate memory and KV-cache needs before local Hugging Face model runs.
+description: Estimate memory and KV-cache needs before local Hugging Face model runs. Use before loading a new checkpoint, changing dtype/resolution/batch size, or planning a run on different hardware.
 source: C:\Users\Admin\Desktop\ASkills\skills\hf-mem\SKILL.md
 ---
 

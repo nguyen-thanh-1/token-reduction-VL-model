@@ -1,6 +1,6 @@
 ---
 name: research-decision-records
-description: Record major research and architecture decisions while the pruning method is still open.
+description: Record major research and architecture decisions while the pruning method is still open. Use when choosing or changing a pruning method, token budget, metric, dataset protocol, or evaluation backend, or when writing under docs/adr.
 source: C:\Users\Admin\Desktop\ASkills\skills\architecture-decision-records\SKILL.md
 ---
 

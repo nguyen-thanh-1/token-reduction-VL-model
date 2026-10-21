@@ -1,6 +1,6 @@
 ---
 name: python-packaging
-description: Keep the installable research package and uv metadata reproducible.
+description: Keep the installable research package and uv metadata reproducible. Use when editing pyproject.toml, package discovery, build settings, or dependency bounds.
 source: C:\Users\Admin\Desktop\ASkills\skills\python-packaging\SKILL.md
 ---
 
