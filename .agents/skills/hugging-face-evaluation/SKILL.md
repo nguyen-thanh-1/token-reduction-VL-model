@@ -1,6 +1,6 @@
 ---
 name: hugging-face-evaluation
-description: Plan local model evaluation with explicit backends, smoke tests, and reproducible benchmark settings.
+description: Plan local model evaluation with explicit backends, smoke tests, and reproducible benchmark settings. Use when running or changing baseline inference, scoring predictions, or scaling a run from a smoke test to a full benchmark.
 source: C:\Users\Admin\Desktop\ASkills\skills\hugging-face-community-evals\SKILL.md
 ---
 

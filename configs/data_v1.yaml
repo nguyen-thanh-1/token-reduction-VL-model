@@ -1,0 +1,46 @@
+schema_version: "1.0"
+raw_root: data/raw
+processed_root: data/processed/v1
+
+protocol:
+  training:
+    - gqa_train
+  validation:
+    - gqa_val
+  evaluation:
+    - gqa_testdev
+    - mmb_validation
+    - mme_test
+  inference_only:
+    - gqa_test
+    - mmb_test
+
+sources:
+  gqa_train:
+    dataset: gqa
+    split: train
+    path: data/processed/v1/gqa/train.jsonl
+  gqa_val:
+    dataset: gqa
+    split: val
+    path: data/processed/v1/gqa/val.jsonl
+  gqa_testdev:
+    dataset: gqa
+    split: testdev
+    path: data/processed/v1/gqa/testdev.jsonl
+  gqa_test:
+    dataset: gqa
+    split: test
+    path: data/processed/v1/gqa/test.jsonl
+  mmb_validation:
+    dataset: mmbench
+    split: validation
+    path: data/processed/v1/mmbench/validation.jsonl
+  mmb_test:
+    dataset: mmbench
+    split: test
+    path: data/processed/v1/mmbench/test.jsonl
+  mme_test:
+    dataset: mme
+    split: test
+    path: data/processed/v1/mme/test.jsonl

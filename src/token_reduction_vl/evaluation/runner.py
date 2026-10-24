@@ -44,12 +44,21 @@ def run_baseline(
             if limit is not None and count >= limit:
                 break
             result = model.predict(sample.image, sample.question)
+            task_type = sample.metadata.get("task_type")
             record = {
                 "sample_id": sample.sample_id,
+                "dataset": sample.metadata.get("dataset"),
+                "split": sample.metadata.get("split"),
+                "task_type": task_type,
+                "image_id": sample.metadata.get("image_id"),
                 "question": sample.question,
                 "references": list(sample.answers),
                 "prediction": result.text,
-                "exact_match": _exact_match(result.text, sample.answers),
+                "exact_match": (
+                    _exact_match(result.text, sample.answers)
+                    if task_type in (None, "open_vqa")
+                    else None
+                ),
                 "latency_seconds": result.latency_seconds,
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,

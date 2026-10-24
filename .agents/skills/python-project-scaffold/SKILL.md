@@ -1,6 +1,6 @@
 ---
 name: python-project-scaffold
-description: Maintain a research-ready Python project structure with uv, src layout, scripts, configuration, and tests.
+description: Maintain a research-ready Python project structure with uv, src layout, scripts, configuration, and tests. Use when adding a new module, script, config file, or top-level directory.
 source: C:\Users\Admin\Desktop\ASkills\skills\python-development-python-scaffold\SKILL.md
 ---
 

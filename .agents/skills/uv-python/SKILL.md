@@ -1,6 +1,6 @@
 ---
 name: uv-python
-description: Manage this project with uv and Python 3.12.
+description: Manage this project with uv and Python 3.12. Use when running any Python command, adding or removing dependencies, or touching uv.lock or .python-version.
 ---
 
 # uv and Python 3.12

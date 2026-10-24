@@ -1,6 +1,6 @@
 ---
 name: hugging-face-cli
-description: Use Hugging Face Hub CLI and environment variables safely for model and dataset operations.
+description: Use Hugging Face Hub CLI and environment variables safely for model and dataset operations. Use when running `hf` commands, authenticating, inspecting or clearing the HF cache, or pinning Hub revisions.
 source: C:\Users\Admin\Desktop\ASkills\skills\hugging-face-cli\SKILL.md
 ---
 

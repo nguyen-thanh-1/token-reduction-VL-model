@@ -1,6 +1,6 @@
 ---
 name: python-testing
-description: Build focused pytest coverage for loaders, configuration, and evaluation logic.
+description: Build focused pytest coverage for loaders, configuration, and evaluation logic. Use when adding or changing tests, fixtures, or test infrastructure.
 source: C:\Users\Admin\Desktop\ASkills\skills\python-testing-patterns\SKILL.md
 ---
 

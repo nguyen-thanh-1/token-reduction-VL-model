@@ -1,0 +1,18 @@
+{
+  "dataset": "mme",
+  "rows": 10,
+  "labelled_rows": 10,
+  "unlabelled_rows": 0,
+  "correct": 7,
+  "accuracy": 0.7,
+  "mme_total_score": 130.0,
+  "categories": {
+    "code_reasoning": {
+      "questions": 10,
+      "pairs": 5,
+      "accuracy_percent": 70.0,
+      "accuracy_plus_percent": 60.0,
+      "score": 130.0
+    }
+  }
+}

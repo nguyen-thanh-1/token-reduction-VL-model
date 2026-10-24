@@ -17,10 +17,22 @@ wheels/
 # Virtual environments
 .venv
 
-# Downloaded datasets and experiment artifacts are local and should not be committed.
+# Downloaded datasets stay local; they are reproducible from the download scripts.
 data/**/*
 !data/**/
 !data/**/.gitkeep
-outputs/**/*
-!outputs/**/
-!outputs/**/.gitkeep
+
+# Benchmark predictions, reports, figures, and tables under outputs/ are
+# intentionally versioned so results can be reviewed and shared by the team.
+# Keep only temporary test/smoke files and heavyweight training checkpoints local.
+outputs/.pytest-tmp*/
+outputs/preprocess-smoke/
+outputs/**/smoke_*
+outputs/**/checkpoints/
+outputs/**/checkpoint/
+outputs/**/checkpoint-*/
+outputs/**/*.safetensors
+outputs/**/*.ckpt
+outputs/**/*.pt
+outputs/**/*.pth
+outputs/**/pytorch_model*.bin

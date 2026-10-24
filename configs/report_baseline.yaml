@@ -1,0 +1,32 @@
+report:
+  id: qwen3-vl-2b-instruct-full-token-bf16
+  title: Qwen3-VL-2B-Instruct Full-Token BF16 Baseline
+  output_dir: outputs/reports/baseline/qwen3-vl-2b-instruct-full-token-bf16
+  model_id: Qwen/Qwen3-VL-2B-Instruct
+  precision: bf16
+  pruning_method: none
+
+predictions:
+  gqa:
+    label: GQA testdev balanced
+    path: outputs/baseline/gqa_testdev_balanced.jsonl
+  mmbench:
+    label: MMBench validation
+    path: outputs/baseline/mmb_validation.jsonl
+  mme:
+    label: MME test
+    path: outputs/baseline/mme_test.jsonl
+
+visualization:
+  dpi: 180
+  max_scatter_points_per_dataset: 5000
+
+failure_gallery:
+  filename: failure_cases.html
+  max_cases_per_dataset: 12
+  image_max_width: 720
+  jpeg_quality: 82
+  canonical_sources:
+    gqa: data/processed/v1/gqa/testdev.jsonl
+    mmbench: data/processed/v1/mmbench/validation.jsonl
+    mme: data/processed/v1/mme/test.jsonl

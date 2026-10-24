@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Keep repository changes reviewable and safe.
+description: Keep repository changes reviewable and safe. Use when creating branches, committing, pushing, opening PRs, or running any git command that changes repository state.
 ---
 
 # Git workflow
