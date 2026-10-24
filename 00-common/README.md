@@ -1,43 +1,34 @@
-# Bốn cách thực hiện giảm visual token — tổng quan và phần dùng chung
+# Phần dùng chung cho cả 4 phương pháp
 
-- Trạng thái: **Đề xuất** (chưa triển khai; phương pháp cuối cùng sẽ được ghi vào ADR 0002)
+- Trạng thái: **Đề xuất** (chưa triển khai; phương pháp được chọn sẽ ghi vào ADR 0002)
 - Cập nhật: 2026-10-24
 - Model: `Qwen/Qwen3-VL-2B-Instruct`, snapshot `89644892e4d85e24eaac8bacfd4f463576704203`, Transformers 5.x
 - Vị trí can thiệp chung: **P2**, sau Final 2×2 PatchMerger, trước `masked_scatter`
-  (sơ đồ: [`architecture/dsfold-proposal/`](../../../architecture/dsfold-proposal/))
+  (sơ đồ: [`architecture/dsfold-proposal/`](../architecture/dsfold-proposal/))
+- Chỉ mục 4 phương pháp và cách tổ chức nhóm: [`../METHODS.md`](../METHODS.md)
 
 > **7 mức ngân sách:** L7 = 100% · L6 = 75% · L5 = 50% · L4 = 33,3% · L3 = 22,2% · L2 = 11,1% · L1 = 5,6%.
 > Bảng đầy đủ kèm số token thật của từng benchmark nằm ở [mục 6](#6-các-mức-ngân-sách-7-mức-cố-định).
 
-File này chứa mọi thứ **dùng chung** cho cả 4 cách: ký hiệu, thông số model,
-cách lắp token đã cắt vào model, công thức chi phí, mức ngân sách, giao thức dữ
-liệu và đánh giá. Mỗi file cách 1–4 chỉ mô tả phần riêng của nó và tham chiếu
-về đây.
+**Mọi thành viên phải đọc file này trước.** File chứa những thứ **giống nhau
+cho cả 4 phương pháp**, để kết quả so sánh được với nhau:
+- ký hiệu và thông số model;
+- wrapper lắp token đã cắt vào model;
+- công thức chi phí và 7 mức ngân sách;
+- giao thức dữ liệu và đánh giá;
+- các đối chứng.
 
-## 1. Hai câu hỏi và bốn cách
+Không thành viên nào được tự đổi những phần này. Muốn đổi thì phải thống nhất cả
+nhóm và cập nhật file này.
 
-Mọi phương pháp cắt token đều trả lời hai câu hỏi độc lập:
+## 1. Hai câu hỏi mà mọi phương pháp phải trả lời
 
 1. **Giữ bao nhiêu token?** Đó là ngân sách `K`, hay tỉ lệ giữ `r = K / N`.
 2. **Giữ những token nào?** Đó là tập chỉ số `I_keep ⊂ {0, …, N−1}`, với `|I_keep| = K`.
 
-| | **Token nào: công thức toán** | **Token nào: mạng học** |
-| --- | --- | --- |
-| **Bao nhiêu: r cố định** | [Cách 1 — DSFold không huấn luyện](01-training-free-dsfold.md) | [Cách 3 — Score head](03-learned-token-scorer.md) |
-| **Bao nhiêu: mạng học** | [Cách 2 — DSFold-A (budget head)](02-learned-budget-dsfold-a.md) | [Cách 4 — Học toàn bộ](04-fully-learned.md) |
-
-| | Cách 1 | Cách 2 | Cách 3 | Cách 4 |
-| --- | --- | --- | --- | --- |
-| Tham số học thêm | 0 | ≈ 0,66M | ≈ 2,1M (3a) / 3,5M (3b) / 2,6M (3c) | ≈ 2,6M |
-| Gradient qua model 2B | không | không | tuyến B: chỉ gradient theo đầu vào, 1 lần mỗi mẫu; tuyến A: có | có |
-| Chi phí GPU thêm (ước tính) | ≈ 2 giờ chỉnh tham số | ≈ 9 giờ tạo nhãn | ≈ 6 giờ (B) / ≈ 12 giờ thêm (A) | ≈ 3–5 ngày |
-| K thích ứng theo mẫu | không | **có** | không | **có** |
-| Rủi ro | thấp | thấp–trung bình | trung bình–cao | cao |
-| Vai trò trong khoá luận | **bắt buộc** | **phần "adaptive" chính** | mở rộng | hướng phát triển |
-
-Mọi con số chi phí là **ước tính** từ thời gian của baseline (GQA ≈ 0,155 s/mẫu,
-MME ≈ 1,61 s/mẫu, peak VRAM 4,1–7,6 GiB). Cần đo lại trên GPU thực tế trước khi
-lập lịch.
+Mỗi phương pháp trả lời hai câu hỏi này theo cách riêng (xem bảng trong
+[`../METHODS.md`](../METHODS.md)). Nhưng **mọi phương pháp đều xuất ra cùng một
+dạng kết quả** (mục 4.0), để dùng chung wrapper và giao thức đánh giá.
 
 ## 2. Ký hiệu
 
@@ -83,9 +74,47 @@ Giả định: **mỗi mẫu có đúng 1 ảnh** (đúng với GQA, MMBench, MM
 
 ## 4. Phần cài đặt chung: lắp token đã cắt vào model
 
-Phần này **giống nhau cho cả 4 cách**. Đầu vào là `I_keep` và các tensor
-`v′ ∈ R^{K×2048}` cùng `f′_l ∈ R^{K×2048}`. Mỗi cách tạo ra chúng theo kiểu
-riêng; chỉ cách nào có Fold thì `f′_l` mới khác `f_l[I_keep]`.
+Phần này **giống nhau cho cả 4 phương pháp**. Đầu vào là `I_keep` và các tensor
+`v′ ∈ R^{K×2048}` cùng `f′_l ∈ R^{K×2048}`. Mỗi phương pháp tạo ra chúng theo
+kiểu riêng.
+
+### 4.0 Interface bắt buộc cho mọi phương pháp
+
+Mọi phương pháp cài một lớp theo protocol `VisualTokenPruner` (mở rộng file
+`src/token_reduction_vl/pruning/base.py`). Lớp đó có đúng một hàm `select`:
+
+```python
+@dataclass(frozen=True)
+class PrunerInput:
+    v: Tensor                  # [N, 2048]  main visual embeddings
+    deepstack: list[Tensor]    # 3 × [N, 2048]  f₁, f₂, f₃
+    grid_hw: tuple[int, int]   # (H′, W′); token j nằm ở (j // W′, j % W′)
+    question_ids: Tensor       # [N_q] token id của câu hỏi + lựa chọn (định nghĩa ở PP1 mục 3.1)
+    embed_tokens: nn.Embedding # bảng embedding của LLM (chỉ đọc)
+    ratio: float | None        # r cố định (PP1, PP3); None nếu phương pháp tự chọn K (PP2, PP4)
+
+@dataclass(frozen=True)
+class PrunerOutput:
+    keep_indices: Tensor       # [K], int64, SẮP TĂNG DẦN, không trùng, 1 ≤ K ≤ N
+    v_kept: Tensor             # [K, 2048]  đưa vào masked_scatter
+    deepstack_kept: list[Tensor]  # 3 × [K, 2048]  đưa vào decoder layer 0/1/2
+    metadata: dict             # bắt buộc: "K", "N", "method", "ratio_target"; tuỳ chọn: thời gian, điểm số …
+
+class VisualTokenPruner(Protocol):
+    name: str
+    def select(self, x: PrunerInput) -> PrunerOutput: ...
+```
+
+Wrapper (mục 4.2) **chỉ** gọi `select`, rồi làm phần còn lại. Nhờ vậy:
+- 4 phương pháp chạy cùng một code suy luận và đánh giá;
+- một phương pháp đúng interface có thể cắm vào ngay khi wrapper sẵn sàng;
+- trước đó, mỗi thành viên kiểm thử hàm `select` của mình trên tensor giả
+  (unit test, không cần model).
+
+Ràng buộc mà wrapper phải `assert`:
+- `keep_indices` tăng dần;
+- `v_kept.shape[0] == deepstack_kept[l].shape[0] == K` với mọi l;
+- dtype khớp với `v`.
 
 ### 4.1 Vì sao không dùng thẳng `model.generate()`
 
@@ -256,11 +285,11 @@ mạnh, nên dự kiến chất lượng sẽ giảm rõ.
 
 ### 6.3 Quy tắc dùng mức
 
-- **Chạy chính:** cách 1 và cách 3 chạy ở cả 7 mức. Trên dev subset 1.000 câu
+- **Chạy chính:** PP1 và PP3 chạy ở cả 7 mức. Trên dev subset 1.000 câu
   thì chạy cả 7 mức; trên full benchmark thì chạy L6, L5, L4, L3, L2.
 - **Quét dày trên dev subset** (chỉ để tìm điểm gãy, không báo cáo làm kết quả
   chính): r ∈ {100, 90, 75, 60, 50, 40, 33,3, 25, 22,2, 15, 11,1, 5,6}%.
-- **Cách 2 và cách 4** có K thay đổi theo mẫu. Chúng được so ở cùng **tỉ lệ giữ
+- **PP2 và PP4** có K thay đổi theo mẫu. Chúng được so ở cùng **tỉ lệ giữ
   trung bình thực tế** trên từng benchmark: `r̄ = (Σ K) / (Σ N)`.
 - **Mức trần tuyệt đối** {64, 128, 256} token chỉ là phân tích phụ.
 
@@ -268,7 +297,7 @@ mạnh, nên dự kiến chất lượng sẽ giảm rõ.
 
 | Vai trò | Split | Dùng cho |
 | --- | --- | --- |
-| Huấn luyện | GQA train balanced | tạo nhãn và huấn luyện mọi mạng nhỏ (cách 2–4) |
+| Huấn luyện | GQA train balanced | tạo nhãn và huấn luyện mọi mạng nhỏ (PP2–4) |
 | Chỉnh tham số | GQA val balanced | chọn siêu tham số, ngưỡng, λ; early stopping |
 | Dev subset | 1.000 mẫu ngẫu nhiên cố định (seed 42) từ mỗi split đánh giá | **chỉ** để quét nhanh và so sánh sơ bộ; không chỉnh tham số trên đây |
 | Đánh giá | GQA testdev, MMBench validation, MME test | số liệu báo cáo cuối cùng |
@@ -344,12 +373,14 @@ Không ghi đè báo cáo baseline.
 | DivPrune | max–min diversity trên `v` (cosine) |
 | CDPruner | DPP có điều kiện theo câu hỏi (như paper) |
 
-## 10. Thứ tự thực hiện
+## 10. Ai phụ trách phần dùng chung
 
-```
-M1 wrapper + kiểm chứng (mục 4.2 bước 7)
-  → Cách 1 (M2–M5)
-  → Cách 2 (M6)
-  → Cách 3, tuyến B (M7, nếu còn thời gian)
-  → Cách 4: chỉ thiết kế, trình bày ở phần hướng phát triển
-```
+| Thành phần | Mục | Người phụ trách (khuyến nghị) | Kiểm tra trước khi dùng |
+| --- | --- | --- | --- |
+| Wrapper suy luận (lắp token, M-RoPE, decode) | 4 | **một người cài cho cả nhóm** trong tuần đầu | `r = 100%` trùng baseline 100/100 mẫu mỗi benchmark (mục 4.2, bước 7) |
+| Bộ đánh giá: chấm điểm, `agree`, bootstrap, đo thời gian | 8 | cùng người hoặc một người khác | chạy lại ra đúng số liệu baseline trong `outputs/reports/baseline/…` |
+| Danh sách dữ liệu chung: 50k GQA train, 5k GQA val, dev subset 1.000 câu | 7 | một người, làm một lần | lưu thành file trong `configs/` hoặc `data/splits/`, ghi seed |
+| Đối chứng: P0, Random-K, Grid-K, Pool, FastV, DivPrune, CDPruner | 9 | chia đều cho các thành viên | mỗi đối chứng chạy một lần, mọi người dùng chung kết quả |
+
+Nếu nhóm chọn để **mỗi người tự cài wrapper**, mọi bản cài đều phải qua cùng
+bài kiểm tra ở cột cuối trước khi được dùng để báo cáo.

@@ -4,7 +4,7 @@
 - Ngày: 2026-10-21
 - Sơ đồ đi kèm: [`architecture/dsfold-proposal/Qwen3-VL-2B-Instruct-DSFold-proposal.drawio`](../../architecture/dsfold-proposal/Qwen3-VL-2B-Instruct-DSFold-proposal.drawio)
 - Khảo sát tài liệu chi tiết (tiếng Anh): [`visual-token-reduction-proposal.md`](visual-token-reduction-proposal.md)
-- Bốn cách thực hiện (không học → học toàn bộ): [`approaches/README.md`](approaches/README.md)
+- Bốn phương pháp độc lập (PP1–PP4) và tổ chức nhóm: [`METHODS.md`](../../METHODS.md)
 
 ## 1. Tóm tắt
 
@@ -130,8 +130,8 @@ DeepStack, merge cả main stream (kiểu ToMe/VisionZip), cả hai, hoặc khô
 `r ∈ {100%, 75%, 50%, 33,3%, 22,2%, 11,1%, 5,6%}` (7 mức). Các mức 33,3/22,2/11,1/5,6%
 tương ứng với 192/128/64/32 token của LLaVA (576 token), nên so được trực tiếp
 với các paper. Mức trần tuyệt đối `{64, 128, 256}` chỉ dùng làm phân tích phụ.
-K thích ứng theo từng mẫu được mô tả ở cách 2 và cách 4 trong
-[`approaches/`](approaches/README.md).
+K thích ứng theo từng mẫu được mô tả ở PP2 và PP4 trong
+[`METHODS.md`](../../METHODS.md).
 
 ## 5. Can thiệp ở đâu trong sơ đồ
 

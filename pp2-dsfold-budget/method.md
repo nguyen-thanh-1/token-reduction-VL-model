@@ -1,16 +1,16 @@
-# Cách 2 — DSFold-A: mạng nhỏ chọn ngân sách K, DSFold chọn token
+# PP2 — DSFold-A: mạng nhỏ chọn ngân sách K, DSFold chọn token
 
 - Trạng thái: Đề xuất
 - Vai trò: **phần "adaptive" chính của khoá luận**
-- Bao nhiêu token: **mạng nhỏ có huấn luyện (budget head)** · Token nào: **DSFold cách 1, tham số đã khoá**
-- Điều kiện bắt đầu: cách 1 đạt M5, và bộ tham số DSFold đã khoá
-- Ký hiệu và giao thức chung: [`README.md`](README.md)
+- Bao nhiêu token: **mạng nhỏ có huấn luyện (budget head)** · Token nào: **PP1 với bộ tham số D** (tự cài theo [`../pp1-dsfold/method.md`](../pp1-dsfold/method.md))
+- Bắt đầu ngay, **không chờ thành viên PP1**: tự cài PP1 với bộ D (PP1 mục 8.0), qua bài kiểm tra PP1 mục 13, rồi làm phần mở rộng ở file này
+- Ký hiệu và giao thức chung: [`00-common/README.md`](../00-common/README.md)
 
 ## 0. Tóm tắt nhanh
 
 **Một câu:** thêm một MLP nhỏ (khoảng 0,66M tham số) nhìn vào thống kê của ảnh
 và câu hỏi, rồi **chọn cho mỗi mẫu một trong 7 mức ngân sách**. Sau đó DSFold
-(cách 1, không đổi gì) chọn và fold đúng số token đó.
+(PP1, không đổi gì) chọn và fold đúng số token đó.
 
 **Học thế nào:** chạy DSFold ở cả 7 mức trên 50.000 câu GQA train, ghi lại mức
 nào còn trả lời giống full-token, rồi học có giám sát. Không cần RL, không cần
@@ -67,14 +67,14 @@ Với r cố định ở L3 (K = 58), mẫu A lãng phí 43 token, còn mẫu B 
 
 ## 1. Bài toán
 
-Cách 1 dùng cùng một r cho mọi mẫu. Nhưng mức token **đủ dùng** khác nhau giữa các mẫu:
+PP1 dùng cùng một r cho mọi mẫu. Nhưng mức token **đủ dùng** khác nhau giữa các mẫu:
 
 - *"Is the sky blue?"* trên ảnh đơn giản: có thể chỉ cần 5,6%.
 - *"What is written on the sign?"* trên ảnh lớn: có thể cần 50–75%.
 
 **Cho:** đặc trưng của cặp (ảnh, câu hỏi) **đã có sẵn** sau ViT và sau S1–S2 của DSFold.
 
-**Tìm:** mức `m*(x) ∈ {L1, …, L7}` (README mục 6) **nhỏ nhất** mà câu trả lời
+**Tìm:** mức `m*(x) ∈ {L1, …, L7}` (phần chung (`00-common`) mục 6) **nhỏ nhất** mà câu trả lời
 vẫn giữ nguyên như full-token.
 
 **Ràng buộc:**
@@ -83,7 +83,7 @@ vẫn giữ nguyên như full-token.
 
 ## 2. Một tính chất quan trọng: greedy DPP cho các tập lồng nhau
 
-Greedy DPP (cách 1, mục 4.2) chọn token **lần lượt**. Tập K₁ token đầu tiên
+Greedy DPP (PP1, mục 4.2) chọn token **lần lượt**. Tập K₁ token đầu tiên
 luôn là tập con của tập K₂ token đầu tiên khi K₁ < K₂. Vì vậy:
 
 - **Chạy greedy một lần** tới `K_max = K(L6 = 75%)` là có ngay `I_keep` cho mọi
@@ -116,7 +116,7 @@ Phải báo cáo **tỉ lệ mẫu có nhãn không đơn điệu** (ví dụ `y
 
 ## 4. Đặc trưng đầu vào x
 
-Mọi đặc trưng đều được tính từ tensor **đã có** trong pipeline cách 1:
+Mọi đặc trưng đều được tính từ tensor **đã có** trong pipeline PP1:
 
 | Nhóm | Định nghĩa chính xác | Kích thước |
 | --- | --- | ---: |
@@ -125,7 +125,7 @@ Mọi đặc trưng đều được tính từ tensor **đã có** trong pipelin
 | Tương tác | `P_v(x_v) ⊙ P_q(x_q)` | 128 |
 | Kích thước | `log N`, `log(H′/W′)`, `log(1 + N_q)` | 3 |
 | Liên quan câu hỏi | mean, std, max của `rel`; entropy chuẩn hoá `H(softmax(rel/0,05)) / log N`; tỉ lệ tổng `rel⁺` nằm trong top-10% token | 5 |
-| DeepStack | mean và std của `ms` (biến thể đã khoá ở cách 1) | 2 |
+| DeepStack | mean và std của `ms` (biến thể A, theo bộ D) | 2 |
 | **Đường cong DPP** | `ρ_m = d2_{sel[K_m − 1]} / d2_{sel[0]}`, với m = 1..6: phần thông tin mới của token cuối cùng ở mỗi mức, so với token đầu tiên | 6 |
 | Loại câu hỏi | 3 cờ nhị phân theo danh sách từ khoá cố định: **đếm** ("how many", "number of"), **đọc chữ** ("written", "say", "text", "word", "letter", "brand"), **vị trí** ("left", "right", "above", "below", "behind", "front", "next to") | 3 |
 
@@ -219,7 +219,7 @@ Cách so sánh:
   thành đường gấp khúc tuyến tính.
 - DSFold-A tại `(r̄_thực, metric)` được gọi là **tốt hơn** khi nó nằm **trên**
   đường đó, tức metric cao hơn giá trị nội suy tại cùng `r̄_thực`.
-- Báo cáo chênh lệch này kèm CI 95% theo bootstrap (README mục 8.4), bootstrap
+- Báo cáo chênh lệch này kèm CI 95% theo bootstrap (phần chung (`00-common`) mục 8.4), bootstrap
   đồng thời cả hai phương pháp trên cùng tập ảnh.
 
 ## 10. Các phương pháp so sánh (cùng bộ chọn token DSFold)

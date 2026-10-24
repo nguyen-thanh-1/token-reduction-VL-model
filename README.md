@@ -80,6 +80,13 @@ and the visual error browser is
 │   ├── pruning/                     # future pruning interfaces
 │   └── reporting/                   # figures, tables, Markdown, and HTML reports
 ├── docs/adr/                        # research/data architecture decisions
+├── docs/research/                   # literature review and DSFold proposal
+├── METHODS.md                       # index of the four candidate pruning methods
+├── 00-common/                       # shared spec: interface, wrapper, budgets, evaluation
+├── pp1-dsfold/                      # PP1: training-free DSFold (base doc for PP2–PP4)
+├── pp2-dsfold-budget/               # PP2: DSFold + learned budget head
+├── pp3-dsfold-scorer/               # PP3: DSFold + learned token scorer
+├── pp4-dsfold-gate/                 # PP4: DSFold + learned hard-concrete gates
 ├── tests/                           # fast dataset, preprocessing, metric, report tests
 ├── .agents/                         # project-specific agent skills and instructions
 ├── AGENT.md                         # top-level working guide

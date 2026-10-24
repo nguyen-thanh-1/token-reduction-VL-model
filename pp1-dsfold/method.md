@@ -1,11 +1,13 @@
-# Cách 1 — DSFold không huấn luyện (toán thuần, r cố định)
+# PP1 — DSFold không huấn luyện (toán thuần, r cố định)
 
 - Trạng thái: Đề xuất
-- Vai trò: **bắt buộc**, là nền móng cho cách 2–4
+- Vai trò: phương pháp độc lập số 1. Đồng thời là **tài liệu nền mà mọi thành viên PP2–PP4 tự cài lại** trước khi làm phần mở rộng
+- Bộ tham số mặc định **D** (dùng chung, không ai tự chỉnh): mục 8.0
+- Bài kiểm tra "cài đúng PP1" (mọi thành viên phải qua): mục 13
 - Bao nhiêu token: **r cố định**, 7 mức · Token nào: **công thức toán**
 - Ký hiệu, cách lắp vào model, công thức chi phí, giao thức đánh giá: xem
-  [`README.md`](README.md) mục 2–9. File này chỉ mô tả phần riêng của cách 1.
-- Ánh xạ lên sơ đồ (M1–M8): [`../dsfold-method-proposal.md`](../dsfold-method-proposal.md) mục 5
+  [`00-common/README.md`](../00-common/README.md) mục 2–9. File này chỉ mô tả phần riêng của PP1.
+- Ánh xạ lên sơ đồ (M1–M8): [`docs/research/dsfold-method-proposal.md`](../docs/research/dsfold-method-proposal.md) mục 5
 
 ## 0. Tóm tắt nhanh
 
@@ -19,7 +21,7 @@ trên GQA val rồi khoá lại.
 
 ### 0.1 Các mức ngân sách dùng trong cách này
 
-Cách 1 chạy **riêng từng mức**, cùng một r cho mọi ảnh:
+PP1 chạy **riêng từng mức**, cùng một r cho mọi ảnh:
 
 | Mức | L7 | L6 | L5 | L4 | L3 | L2 | L1 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -28,7 +30,7 @@ Cách 1 chạy **riêng từng mức**, cùng một r cho mọi ảnh:
 | K của ảnh MMBench trung vị (N = 176) | 176 | 132 | 88 | 59 | 40 | 20 | 10 |
 | K của ảnh MME trung vị (N = 384) | 384 | 288 | 192 | 128 | 86 | 43 | 22 |
 
-Số liệu đầy đủ (trung bình, P95, `N_total′`) nằm ở README mục 6.2.
+Số liệu đầy đủ (trung bình, P95, `N_total′`) nằm ở phần chung (`00-common`) mục 6.2.
 
 ### 0.2 Luồng dữ liệu
 
@@ -83,7 +85,7 @@ v, f₁, f₂, f₃, q, r
    ├─ S2  Chọn:           I_keep = greedy DPP(L = diag(quality)·S·diag(quality), K)
    ├─ S3  Gán:            mỗi d ∈ I_drop → a(d) ∈ I_keep
    ├─ S4  Fold:           f′_l[k] = norm-match(f_l[k] + γ·Σ w_dk·f_l[d])
-   └─ S5  Lắp vào model:  README mục 4.2
+   └─ S5  Lắp vào model:  phần chung (`00-common`) mục 4.2
 ```
 
 ## 3. S1 — Chấm điểm
@@ -264,11 +266,41 @@ Ablation A3 so bốn biến thể:
 
 ## 7. S5 — Lắp vào model
 
-Theo đúng README mục 4.2 (bước 3–6), với `v′` và `f′_l` vừa tính.
+Theo đúng phần chung (`00-common`) mục 4.2 (bước 3–6), với `v′` và `f′_l` vừa tính.
 
 ## 8. Siêu tham số và cách chọn
 
-| Tham số | Lưới tìm kiếm | Mặc định ban đầu |
+### 8.0 Bộ tham số mặc định D (chốt, dùng chung cho cả 4 thành viên)
+
+Mọi thành viên cài PP1 với **đúng** bộ tham số này. Thành viên PP2–PP4 dùng
+bộ D cho phần PP1 bên trong phương pháp của mình và **không tự chỉnh**. Nhờ vậy:
+- 4 bản cài PP1 cho cùng kết quả (mục 13);
+- khác biệt giữa 4 phương pháp chỉ đến từ phần mở rộng.
+
+| Tham số | Giá trị D | Ý nghĩa |
+| --- | --- | --- |
+| α | 1 | trọng số mức liên quan câu hỏi |
+| β | 0,5 | trọng số multi-level saliency |
+| biến thể `ms` | A | `‖f̂₃ − f̂₂‖ + ‖f̂₂ − f̂₁‖` |
+| λ | 0,5 | phạt khoảng cách khi gán |
+| γ | 0,5 | mức fold |
+| τ | 0,1 | nhiệt độ softmax khi fold |
+| `N_cap` | 4.096 | trên ngưỡng này dùng max–min thay cho DPP |
+| clip z-score | [−3, 3] | |
+| ngưỡng `d2` | 1e-6 | dừng DPP và bổ sung theo quality |
+| STOPWORDS | danh sách trong `configs/prune_dsfold.yaml` (mục 3.1) | phải giống hệt nhau giữa các thành viên |
+| dtype tính điểm | fp32 (`v`, `f`, `q` chuyển sang fp32 trước S1) | |
+| phá hoà khi argmax | chọn chỉ số **nhỏ nhất** | để mọi bản cài ra cùng `I_keep` |
+
+Bộ D được ghi vào `configs/prune_dsfold.yaml` (phiên bản `D-1.0`). Mọi kết quả
+của cả 4 phương pháp phải ghi lại phiên bản bộ D đã dùng.
+
+### 8.1 Chỉnh tham số (chỉ thành viên PP1 làm)
+
+Thành viên PP1 chỉnh tham số để báo cáo **kết quả tốt nhất của riêng PP1**.
+Kết quả chỉnh được lưu thành bộ `D-tuned` riêng; bộ D **không đổi**.
+
+| Tham số | Lưới tìm kiếm | Giá trị D |
 | --- | --- | --- |
 | α | {0; 0,5; 1; 2} | 1 |
 | β | {0; 0,5; 1} | 0,5 |
@@ -283,8 +315,8 @@ Theo đúng README mục 4.2 (bước 3–6), với `v′` và `f′_l` vừa t�
    β tốt nhất: thêm 2 lần.
 3. Bước 2: lưới (λ, γ) gồm 16 lần chạy với τ = 0,1, rồi τ: thêm 2 lần.
 4. Tổng khoảng 32 lần × 2.000 câu × khoảng 0,12 s ≈ **2,1 giờ GPU**.
-5. **Khoá** bộ tham số, rồi dùng chung cho **mọi** mức r và mọi benchmark.
-6. Chỉ tiêu chọn: `agree` (README mục 8.2), hoà thì xét accuracy.
+5. **Khoá** kết quả thành bộ `D-tuned`, dùng chung cho **mọi** mức r và mọi benchmark của riêng PP1. Bộ D không đổi.
+6. Chỉ tiêu chọn: `agree` (phần chung (`00-common`) mục 8.2), hoà thì xét accuracy.
 
 ## 9. Thí nghiệm
 
@@ -296,7 +328,7 @@ Theo đúng README mục 4.2 (bước 3–6), với `v′` và `f′_l` vừa t�
 | Full | L6 (75%), L5 (50%), L4 (33,3%), L3 (22,2%), L2 (11,1%) | các phương pháp tốt nhất từ giai đoạn dev, cộng P0, Random-K và **DSFold** | toàn bộ GQA testdev, MMBench val, MME test |
 
 Với MME, mọi bảng kết quả có thêm 3 cột chia theo kích thước ảnh: N ≤ 512,
-512 < N ≤ 4.096, N > 4.096 (README mục 5.1).
+512 < N ≤ 4.096, N > 4.096 (phần chung (`00-common`) mục 5.1).
 
 ### 9.2 Ablation (trên GQA testdev và MME, ở r ∈ {33,3; 11,1}%)
 
@@ -342,8 +374,33 @@ xuống (ví dụ 2.048) và ghi rõ trong báo cáo.
 
 ## 12. Hạn chế đã biết
 
-- ViT vẫn chạy đủ, nên lợi ích chỉ nằm ở LLM prefill và KV cache (README mục 5).
+- ViT vẫn chạy đủ, nên lợi ích chỉ nằm ở LLM prefill và KV cache (phần chung (`00-common`) mục 5).
 - `rel` dùng embedding đầu vào, tức một không gian khá "nông". Nó có thể yếu với
   câu hỏi trừu tượng.
 - `ms` và Fold là giả thuyết. Bộ tham số khoá ở r = 22,2% có thể không tối ưu ở
   mức khác; ta chấp nhận điều này để tránh chỉnh tham số theo từng mức.
+
+## 13. Bài kiểm tra "cài đúng PP1" (bắt buộc cho cả 4 thành viên)
+
+4 thành viên tự cài PP1 theo cùng tài liệu này, nên phải kiểm tra rằng 4 bản
+cài **cho cùng kết quả**. Nếu không, so sánh giữa 4 phương pháp sẽ không còn
+công bằng.
+
+**Bộ kiểm tra chung** (một người tạo một lần, lưu trong `tests/fixtures/pp1_conformance/`):
+- 100 mẫu cố định: 40 GQA testdev, 30 MMBench val, 30 MME test (seed 42). Trong
+  30 mẫu MME có ít nhất 3 mẫu N > 4.096, để kiểm tra nhánh max–min;
+- với mỗi mẫu, lưu `v`, `f₁..f₃` (fp16), `grid_hw`, `question_ids`;
+- kết quả tham chiếu từ bản cài đầu tiên đã được review: `keep_indices` và
+  `deepstack_kept` ở 3 mức L5, L3, L1.
+
+**Tiêu chí đạt:**
+
+| Kiểm tra | Tiêu chí |
+| --- | --- |
+| `keep_indices` | **trùng 100%** với tham chiếu ở cả 3 mức, cho cả 100 mẫu |
+| `deepstack_kept` (sau Fold) | sai số tuyệt đối lớn nhất ≤ 1e-3 (fp32) |
+| `v_kept` | trùng chính xác (`v[keep_indices]`) |
+| Câu trả lời end-to-end ở L3 (cần wrapper) | trùng tham chiếu ≥ 99/100 mẫu (cho phép lệch do bf16 trên GPU khác) |
+
+Bài kiểm tra này được viết thành `pytest` để chạy được trên CPU. Thành viên nào
+chưa qua thì **chưa được** dùng PP1 của mình để làm phần mở rộng hay báo cáo.

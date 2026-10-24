@@ -1,8 +1,9 @@
-# Cách 3 — Score head: mạng nhỏ chấm điểm từng token, r cố định
+# PP3 — Score head: mạng nhỏ chấm điểm từng token, r cố định
 
-- Trạng thái: Đề xuất (mở rộng; làm sau khi cách 1 đạt M5 và cách 2 đạt M6)
-- Bao nhiêu token: **r cố định** (7 mức) · Token nào: **điểm học được + DPP + Fold** (S2–S4 của cách 1 giữ nguyên)
-- Ký hiệu và giao thức chung: [`README.md`](README.md)
+- Trạng thái: Đề xuất. Phương pháp độc lập số 3
+- Bắt đầu ngay, **không chờ thành viên khác**: tự cài PP1 theo [`../pp1-dsfold/method.md`](../pp1-dsfold/method.md) với bộ D (PP1 mục 8.0), qua bài kiểm tra PP1 mục 13, rồi thay S1 bằng score head ở file này
+- Bao nhiêu token: **r cố định** (7 mức) · Token nào: **điểm học được + DPP + Fold** (S2–S4 của PP1 giữ nguyên)
+- Ký hiệu và giao thức chung: [`00-common/README.md`](../00-common/README.md)
 
 ## 0. Tóm tắt nhanh
 
@@ -17,7 +18,7 @@ bao nhiêu), rồi dạy mạng **xếp hạng** token giống saliency.
 
 ### 0.1 Các mức ngân sách dùng trong cách này
 
-Giống cách 1: **r cố định**, chạy riêng từng mức. Một mạng dùng chung cho mọi
+Giống PP1: **r cố định**, chạy riêng từng mức. Một mạng dùng chung cho mọi
 mức, nhờ có đặc trưng `log r`.
 
 | Mức | L7 | L6 | L5 | L4 | L3 | L2 | L1 |
@@ -28,21 +29,21 @@ mức, nhờ có đặc trưng `log r`.
 
 Ở tuyến A, mỗi bước huấn luyện lấy ngẫu nhiên một mức trong L1–L5. L6 và L7
 gần như không mất thông tin nên không cần học. Lúc đánh giá thì chạy cả 7 mức
-như cách 1.
+như PP1.
 
 ### 0.2 Luồng dữ liệu (lúc suy luận)
 
 ```mermaid
 flowchart LR
   A["ViT: v, f₁..f₃<br/>N×2048 mỗi tensor"] --> U["Đặc trưng token u_i<br/>N×467"]
-  S["rel, ms (cách 1)"] --> U
+  S["rel, ms (PP1)"] --> U
   P["toạ độ (row, col)"] --> U
   R["log r"] --> U
   U --> NET["Score head<br/>3a MLP / 3b CNN / 3c Transformer"]
   Qn["Câu hỏi q"] --> NET
   NET --> QH["q̂ = softplus(s) + 1e-3<br/>N"]
-  QH --> DPP["Greedy DPP (cách 1, S2)<br/>L = diag(q̂)·S·diag(q̂)"]
-  DPP --> REST["Assign + Fold + lắp vào LLM<br/>(giống cách 1)"]
+  QH --> DPP["Greedy DPP (PP1, S2)<br/>L = diag(q̂)·S·diag(q̂)"]
+  DPP --> REST["Assign + Fold + lắp vào LLM<br/>(giống PP1)"]
 ```
 
 ### 0.3 Ví dụ số: chi phí của score head trên ảnh GQA trung vị (N = 260)
@@ -57,7 +58,7 @@ Cả ba đều rẻ hơn rất nhiều so với một decoder layer (≈ 4,2 GMA
 
 ## 1. Bài toán
 
-Ở cách 1, điểm chất lượng là một công thức cố định:
+Ở PP1, điểm chất lượng là một công thức cố định:
 
 ```
 quality_i = exp(α·z(rel)_i + β·z(ms)_i)
@@ -66,14 +67,14 @@ quality_i = exp(α·z(rel)_i + β·z(ms)_i)
 Công thức này chỉ dùng hai tín hiệu thủ công, và giả định chúng kết hợp theo
 dạng log-tuyến tính.
 
-**Cách 3:** thay `quality` bằng `q̂_i = softplus(s_θ(i)) + 1e-3`. Trong đó `s_θ`
+**PP3:** thay `quality` bằng `q̂_i = softplus(s_θ(i)) + 1e-3`. Trong đó `s_θ`
 là một mạng nhỏ nhận **nhiều đặc trưng hơn** cho mỗi token và học từ dữ liệu
 xem token nào thật sự quan trọng.
 
 **Giữ nguyên:**
 - DPP (S2), để chống trùng lặp bằng toán thay vì bắt mạng phải tự học điều này;
 - Assign và Fold (S3–S4);
-- cách lắp vào model (README mục 4).
+- cách lắp vào model (phần chung (`00-common`) mục 4).
 
 Như vậy mạng chỉ phải học **một việc**: token i quan trọng tới đâu cho câu hỏi
 này. Việc học sẽ dễ hơn và ít overfit hơn.
@@ -83,8 +84,8 @@ này. Việc học sẽ dễ hơn và ít overfit hơn.
 | Thành phần | Định nghĩa | Kích thước |
 | --- | --- | ---: |
 | Main stream | `P_v(v_i)`, `P_v: Linear(2048 → 256)` | 256 |
-| DeepStack | `P_l(f̂_l[i])` cho l = 1, 2, 3, mỗi `P_l: Linear(2048 → 64)` riêng (`f̂` đã chuẩn hoá như cách 1, mục 3.3) | 192 |
-| Đặc trưng thủ công | `z(rel)_i`, `z(ms)_i` (cách 1) | 2 |
+| DeepStack | `P_l(f̂_l[i])` cho l = 1, 2, 3, mỗi `P_l: Linear(2048 → 64)` riêng (`f̂` đã chuẩn hoá như PP1, mục 3.3) | 192 |
+| Đặc trưng thủ công | `z(rel)_i`, `z(ms)_i` (PP1) | 2 |
 | Vị trí | Fourier features của `(row_i/H′, col_i/W′)`: `sin(2^k·π·x)`, `cos(2^k·π·x)` với k = 0..3 | 16 |
 | Mức ngân sách | `log r` (một mạng dùng chung cho mọi r) | 1 |
 
@@ -209,7 +210,7 @@ câu trả lời full-token. Gradient đi qua model 2B đã đóng băng.
    - ⚠️ **Phải kiểm tra trước (spike khoảng 1 ngày):** Qwen3-VL text model trong
      Transformers 5.x có nhận custom 4D float mask với `sdpa` không. Nếu không,
      dùng `attn_implementation="eager"` (chậm hơn, tốn VRAM hơn).
-5. Lúc suy luận vẫn **xoá thật** token (README mục 4). Trong không gian
+5. Lúc suy luận vẫn **xoá thật** token (phần chung (`00-common`) mục 4). Trong không gian
    attention, bias −9,2 gần tương đương với việc xoá.
 
 ### 5.3 Loss
@@ -238,7 +239,7 @@ L = (1/A) Σ_{t=1..A} KL( p_T(· | y_{<t}) ‖ p_S(· | y_{<t}) )      # teacher
 
 | Câu hỏi | So sánh (cùng r, cùng DPP, cùng Fold) |
 | --- | --- |
-| Điểm học được có hơn công thức thủ công không? | cách 3 so với cách 1 ở 7 mức r |
+| Điểm học được có hơn công thức thủ công không? | PP3 so với PP1 ở 7 mức r |
 | Kiến trúc nào đủ? | 3a / 3b / 3c |
 | Tuyến nào tốt hơn? | B (saliency) / A (chưng cất) |
 | Có cần DPP khi đã học điểm không? | `q̂` + DPP so với top-K theo `q̂` |
@@ -257,7 +258,7 @@ Chất lượng xếp hạng trên GQA val:
 | Saliency nhiễu | ablation Integrated Gradients; dùng thứ hạng (ListNet) thay vì giá trị tuyệt đối |
 | Custom 4D mask không chạy với `sdpa` | dùng eager; hoặc chỉ làm tuyến B |
 | Hết VRAM ở tuyến A | batch 1 + checkpointing; rút A ≤ 4 token; hoặc bỏ tuyến A |
-| Lợi ích nhỏ so với cách 1 | vẫn là kết luận có giá trị: "công thức thủ công đã đủ" |
+| Lợi ích nhỏ so với PP1 | vẫn là kết luận có giá trị: "công thức thủ công đã đủ" |
 
 ## 8. Liên hệ paper
 
@@ -265,12 +266,12 @@ Chất lượng xếp hạng trên GQA val:
 | --- | --- |
 | DynamicViT | nguồn gốc kỹ thuật cổng mềm + straight-through (tuyến A) |
 | VisPruner, TReVS | điểm thủ công, dùng làm đối chứng |
-| RUTA (2608.04132), ETC (2606.00543) | có học trên Qwen3-VL. Cách 3 khác ở chỗ chỉ học điểm, vẫn giữ DPP + Fold DeepStack, và dùng nhãn saliency rẻ |
+| RUTA (2608.04132), ETC (2606.00543) | có học trên Qwen3-VL. PP3 khác ở chỗ chỉ học điểm, vẫn giữ DPP + Fold DeepStack, và dùng nhãn saliency rẻ |
 
 ## 9. Tiêu chí thành công
 
 | Mốc | Tiêu chí |
 | --- | --- |
 | M7a | có nhãn saliency cho 50k mẫu; recall@K của 3a ≥ recall@K của `quality` thủ công trên GQA val |
-| M7b | cách 3 (tuyến B) thắng cách 1 ở ≥ 2 mức r trên GQA testdev, CI không chứa 0 |
+| M7b | PP3 (tuyến B) thắng PP1 ở ≥ 2 mức r trên GQA testdev, CI không chứa 0 |
 | M7c | (tuỳ chọn) tuyến A chạy được trong VRAM hiện có và thắng tuyến B |

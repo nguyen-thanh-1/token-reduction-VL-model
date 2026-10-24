@@ -1,9 +1,10 @@
-# Cách 4 — Học toàn bộ: cổng học được quyết cả "bao nhiêu" lẫn "token nào"
+# PP4 — Học toàn bộ: cổng học được quyết cả "bao nhiêu" lẫn "token nào"
 
-- Trạng thái: Đề xuất (**hướng phát triển**; chỉ triển khai nếu cách 1–2 xong sớm và còn ≥ 3–4 tuần)
-- Bao nhiêu token: **học** · Token nào: **học** · Fold DeepStack (S3–S4 của cách 1): **giữ nguyên**
-- Điều kiện: custom 4D attention mask đã chạy được (spike ở cách 3, mục 5.2); có kiến trúc 3c
-- Ký hiệu và giao thức chung: [`README.md`](README.md)
+- Trạng thái: Đề xuất (**hướng phát triển**; chỉ triển khai nếu PP1–2 xong sớm và còn ≥ 3–4 tuần)
+- Bao nhiêu token: **học** · Token nào: **học** · Fold DeepStack (S3–S4 của PP1): **giữ nguyên**
+- Bắt đầu ngay, **không chờ thành viên khác**: tự cài PP1 theo [`../pp1-dsfold/method.md`](../pp1-dsfold/method.md) với bộ D (dùng S3–S4 Fold và `I_DPP` để neo), qua bài kiểm tra PP1 mục 13
+- Phần tự làm trong phương pháp này: mạng cổng (mục 2), spike custom 4D attention mask (mục 4.1), huấn luyện (mục 5–6)
+- Ký hiệu và giao thức chung: [`00-common/README.md`](../00-common/README.md)
 
 ## 0. Tóm tắt nhanh
 
@@ -12,21 +13,21 @@
 được huấn luyện end-to-end qua model 2B đóng băng, để cân bằng "giữ câu trả
 lời như full-token" và "dùng ít token".
 
-**Khác cách 2:**
-- Cách 2 chọn một trong 7 mức rồi để DSFold chọn token.
-- Cách 4 không có mức rời rạc: mạng quyết **cả hai** việc.
+**Khác PP2:**
+- PP2 chọn một trong 7 mức rồi để DSFold chọn token.
+- PP4 không có mức rời rạc: mạng quyết **cả hai** việc.
 
 ### 0.1 Các mức ngân sách trong cách này
 
-Cách 4 **không chọn mức** lúc suy luận: K là số cổng mở, có thể là bất kỳ số
+PP4 **không chọn mức** lúc suy luận: K là số cổng mở, có thể là bất kỳ số
 nào trong `[K_min, N]`. Các mức L1–L7 chỉ xuất hiện ở bốn chỗ:
 
 | Chỗ dùng | Mức | Vai trò |
 | --- | --- | --- |
 | Chặn dưới | L1 = 5,6% ⇒ `K_min = ⌈0,056·N⌉` | không bao giờ giữ ít hơn mức nhỏ nhất đã đánh giá |
 | Neo lúc huấn luyện | L3 = 22,2% | `I_DPP` là lựa chọn của DSFold ở L3 (số hạng (5) trong mục 5) |
-| Điểm vận hành | λ ∈ {0,25; 0,5; 1; 2; 4} ⇒ mỗi λ cho một `r̄` thực tế | các `r̄` này được so với đường của cách 1 và cách 2 |
-| So sánh | đường nội suy qua L1–L7 của cách 1 | xem mạng nằm trên hay dưới đường đó |
+| Điểm vận hành | λ ∈ {0,25; 0,5; 1; 2; 4} ⇒ mỗi λ cho một `r̄` thực tế | các `r̄` này được so với đường của PP1 và PP2 |
+| So sánh | đường nội suy qua L1–L7 của PP1 | xem mạng nằm trên hay dưới đường đó |
 
 Kỳ vọng định tính (phải đo): λ = 0,25 cho `r̄` khoảng 40–60%, còn λ = 4 cho
 `r̄` khoảng 5–10%.
@@ -36,13 +37,13 @@ Kỳ vọng định tính (phải đo): λ = 0,25 cho `r̄` khoảng 40–60%, c
 ```mermaid
 flowchart LR
   A["ViT: v, f₁..f₃"] --> U["Đặc trưng token u_i (467)"]
-  U --> NET["Thân mạng 3c<br/>self-attn + cross-attn câu hỏi"]
+  U --> NET["Thân mạng transformer nhẹ<br/>self-attn + cross-attn câu hỏi"]
   Qn["Câu hỏi q"] --> NET
   NET --> LA["log α_i cho mỗi token"]
   LA -->|"huấn luyện"| HC["Hard-concrete z_i ∈ [0,1]<br/>→ attention bias log(z+ε)"]
   LA -->|"suy luận"| DET["ẑ_i ≥ 0,5 ⇒ giữ<br/>K = số token giữ (≥ K_min)"]
   HC --> LLMt["LLM đóng băng (mặt nạ mềm)<br/>loss: KL + λ·E[K]/N + …"]
-  DET --> FOLD["Assign + Fold (cách 1)"] --> LLMi["LLM (xoá thật token)"]
+  DET --> FOLD["Assign + Fold (PP1)"] --> LLMi["LLM (xoá thật token)"]
 ```
 
 ### 0.3 Ví dụ số về rate penalty (ảnh GQA trung vị, N = 260)
@@ -74,14 +75,32 @@ token bị bỏ vẫn được **Fold vào DeepStack** của token giữ lại, 
 
 ## 2. Kiến trúc
 
-- Thân mạng giống **3c** (cách 3, mục 3c), gồm `u_i` (467 chiều), self-attention,
-  cross-attention tới câu hỏi và FFN. **Không** đưa `log r` vào, vì ở đây r do
-  mạng tự quyết.
-- Đầu ra cho mỗi token là `log α_i = Linear(256 → 1)(LN(h_i))`: tham số vị trí
-  của phân phối hard-concrete (mục 3).
-- Tham số: **khoảng 2,6M**.
-- Khởi tạo: trọng số của cách 3 (nếu có), với bias đầu ra đặt sao cho
-  `P(z_i > 0) ≈ 0,5` cho mọi token lúc bắt đầu.
+**Đặc trưng cho mỗi token i** (`u_i`, 466 chiều):
+
+| Thành phần | Định nghĩa | Kích thước |
+| --- | --- | ---: |
+| Main stream | `P_v(v_i)`, `P_v: Linear(2048 → 256)` | 256 |
+| DeepStack | `P_l(f̂_l[i])` cho l = 1, 2, 3, mỗi `P_l: Linear(2048 → 64)` riêng (`f̂` chuẩn hoá như PP1 mục 3.3) | 192 |
+| Đặc trưng thủ công | `z(rel)_i`, `z(ms)_i` tính như PP1 mục 3.2–3.4 | 2 |
+| Vị trí | Fourier features của `(row_i/H′, col_i/W′)`: `sin(2^k·π·x)`, `cos(2^k·π·x)`, k = 0..3 | 16 |
+
+Câu hỏi: từng token `P_q(q_j)`, với `P_q: Linear(2048 → 256)`.
+
+**Thân mạng** (một khối transformer nhẹ, d = 256):
+
+```
+h      = Linear(466 → 256)(u)                         # [N, 256]
+h      = h + SelfAttn_4head(LN(h))                    # token nhìn nhau
+h      = h + CrossAttn_4head(LN(h), P_q(q))           # token nhìn câu hỏi
+h      = h + FFN(256 → 1024 → 256, GELU)(LN(h))
+log α  = Linear(256 → 1)(LN(h))                        # [N]
+```
+
+- Không đưa `log r` vào, vì r do mạng tự quyết.
+- Tham số: **khoảng 2,6M**, phần lớn nằm ở `P_v`, `P_l`, `P_q`.
+- Khởi tạo: ngẫu nhiên (Xavier). Bias của lớp cuối đặt bằng
+  `β · log(−γ/ζ)` ≈ −1,6 (với β, γ, ζ ở mục 3), để lúc bắt đầu `π_i ≈ 0,5` cho
+  mọi token.
 
 ## 3. Cổng hard-concrete (Louizos và cộng sự, ICLR 2018)
 
@@ -114,8 +133,22 @@ nếu |I_keep| > N:                    không xảy ra
 
 ## 4. Đưa cổng vào LLM lúc huấn luyện
 
-Giống cách 3, tuyến A (mục 5.2), nhưng **không cần straight-through**, vì
-`z_i` đã khả vi theo `log α_i`:
+### 4.1 Spike kỹ thuật (làm đầu tiên, khoảng 1 ngày)
+
+Kiểm tra rằng Qwen3-VL text model trong Transformers 5.x nhận được **custom 4D
+float attention mask** `[1, 1, N_total, N_total]` với `attn_implementation="sdpa"`:
+1. truyền mask = causal mask (0 / −∞) cộng một bias b ở các cột ảnh;
+2. với b ≡ 0, logit phải **trùng** khi không truyền mask;
+3. với b = −1e4 ở một nửa số cột ảnh, logit phải **gần** kết quả khi xoá thật
+   các token đó (sai lệch nhỏ do softmax);
+4. gradient theo b phải khác 0.
+
+Nếu `sdpa` không nhận mask này thì dùng `attn_implementation="eager"` (chậm và
+tốn VRAM hơn). Phải ghi kết quả spike vào báo cáo của PP4.
+
+### 4.2 Cách đưa cổng vào
+
+Không cần straight-through, vì `z_i` đã khả vi theo `log α_i`:
 
 - **Attention bias:** cộng `b_i = log(z_i + ε)`, với ε = 1e-4, vào logits của
   key tại vị trí ảnh i, ở mọi layer và head (custom 4D float mask).
@@ -125,7 +158,7 @@ Giống cách 3, tuyến A (mục 5.2), nhưng **không cần straight-through**
   Fold chỉ cộng vào token đang mở.
 
 Lúc suy luận thì **xoá thật** token theo `I_keep`, rồi lắp vào model theo
-README mục 4.
+phần chung (`00-common`) mục 4.
 
 ## 5. Hàm mục tiêu
 
@@ -146,7 +179,7 @@ Giải thích từng thành phần:
    trên đường Pareto.
 4. **Chống trùng lặp:** phạt việc mở đồng thời hai token rất giống nhau
    (`S_ij = cos(v_i, v_j) > 0,8`). Đây là thay thế khả vi cho DPP.
-5. **Neo theo DPP:** `I_DPP` là lựa chọn của DSFold (cách 1) ở mức L3 = 22,2%.
+5. **Neo theo DPP:** `I_DPP` là lựa chọn của DSFold (PP1) ở mức L3 = 22,2%.
    κ(t) giảm dần về 0 (mục 6), để mạng khởi đầu từ một lời giải tốt rồi tự điều chỉnh.
 
 ## 6. Lịch huấn luyện
@@ -181,7 +214,7 @@ Giải thích từng thành phần:
 
 | Câu hỏi | So sánh |
 | --- | --- |
-| Học toàn bộ có hơn cách 2 (budget head + DSFold) không? | cùng `r̄` thực tế, dùng nội suy đường Pareto (cách 2, mục 9) |
+| Học toàn bộ có hơn PP2 (budget head + DSFold) không? | cùng `r̄` thực tế, dùng nội suy đường Pareto (PP2, mục 9) |
 | Fold còn giúp khi đã học cổng không? | có / không có S3–S4 |
 | Neo DPP và số hạng chống trùng lặp có cần không? | κ ≡ 0; η = 0 |
 | Tổng quát hoá | GQA → MMBench, MME |
@@ -201,12 +234,12 @@ Giải thích từng thành phần:
 - Khung rate–utility có **Fold DeepStack** và đặc trưng DeepStack cho Qwen3-VL.
 - So sánh có hệ thống trên cùng một khung, cùng dữ liệu và cùng đối chứng, theo
   ba mức học:
-  - không học (cách 1);
-  - học một phần (cách 2, 3);
-  - học toàn bộ (cách 4).
+  - không học (PP1);
+  - học một phần chọn K (PP2) hoặc học điểm token (PP3);
+  - học toàn bộ (PP4).
 
 ## 11. Khuyến nghị cho khoá luận
 
-Trình bày cách 4 ở chương **hướng phát triển**, gồm thiết kế ở mục 2–6 và lý do
-chưa triển khai (chi phí, rủi ro). Chỉ triển khai khi cách 1 và 2 đã có đủ kết
+Trình bày PP4 ở chương **hướng phát triển**, gồm thiết kế ở mục 2–6 và lý do
+chưa triển khai (chi phí, rủi ro). Chỉ triển khai khi PP1 và 2 đã có đủ kết
 quả trên cả 3 benchmark.

@@ -8,7 +8,8 @@ written for the user under `docs/research/` may be in Vietnamese.
 
 Research goal: reduce the number of visual tokens fed to the LLM while keeping
 (or improving) answer quality relative to the full-token baseline. Target is a
-thesis, ideally publishable. See `docs/research/` for the current proposal.
+thesis, ideally publishable. See `METHODS.md` (repo root) for the four candidate methods; each lives in its own root folder
+(`00-common/`, `pp1-dsfold/`, `pp2-dsfold-budget/`, `pp3-dsfold-scorer/`, `pp4-dsfold-gate/`).
 
 `AGENT.md` and `.agents/AGENT.md` are the shared agent guides (also used by
 other agents); this file adds Claude-specific routing. If they disagree, ask.
