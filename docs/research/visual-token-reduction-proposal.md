@@ -206,7 +206,7 @@ retained tokens.
 - **H2.** Keeping original M-RoPE coordinates beats re-indexing as a dense grid,
   especially on spatial GQA questions.
 - **H3.** Folding pruned tokens into DeepStack improves quality over pure
-  selection at aggressive budgets (≤ 25% retained).
+  selection at aggressive budgets (≤ 22.2% retained).
 - **H4.** The multi-level saliency term adds value on top of diversity alone.
 - **H5.** At equal `N_visual`, pruning beats resolution reduction. This is not
   guaranteed, and it must be measured. If it fails, that negative result is
@@ -222,7 +222,7 @@ average pooling.
 k = 3), DivPrune, CDPruner, DART, and VisionZip adapted without [CLS] (state
 the adaptation).
 
-**Budgets:** retention ratios {50%, 25%, 11.1%, 5.6%} of `N_visual` per image,
+**Budgets:** retention ratios {100%, 50%, 33.3%, 22.2%, 11.1%, 5.6%} of `N_visual` per image (33.3–5.6% match LLaVA 192/128/64/32 of 576),
 plus absolute caps {64, 128, 256} tokens for comparison with LLaVA-style
 papers.
 
@@ -277,7 +277,7 @@ which tokens get kept (compare with FEATHER).
 | M2 | Controls (resolution, random, grid, pool) at 4 budgets | first quality–cost Pareto plot |
 | M3 | FastV, DivPrune, CDPruner on Qwen3-VL-2B | reproduced trends from papers |
 | M4 | DeepStack study (H1, H2) | answer to "how to prune with DeepStack" — paper core #1 |
-| M5 | DSFold select + fold (H3, H4) | beats best baseline at ≤ 25% retained, CI excludes 0 |
+| M5 | DSFold select + fold (H3, H4) | beats best baseline at ≤ 22.2% retained, CI excludes 0 |
 | M6 | Text-rich + POPE benchmarks, adaptive budget | generality |
 | M7 | Write-up | thesis chapters; workshop/conference submission |
 

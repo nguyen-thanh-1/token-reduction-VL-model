@@ -4,6 +4,7 @@
 - Ngày: 2026-10-21
 - Sơ đồ đi kèm: [`architecture/dsfold-proposal/Qwen3-VL-2B-Instruct-DSFold-proposal.drawio`](../../architecture/dsfold-proposal/Qwen3-VL-2B-Instruct-DSFold-proposal.drawio)
 - Khảo sát tài liệu chi tiết (tiếng Anh): [`visual-token-reduction-proposal.md`](visual-token-reduction-proposal.md)
+- Bốn cách thực hiện (không học → học toàn bộ): [`approaches/README.md`](approaches/README.md)
 
 ## 1. Tóm tắt
 
@@ -126,9 +127,11 @@ DeepStack, merge cả main stream (kiểu ToMe/VisionZip), cả hai, hoặc khô
   decode.
 
 **Ngân sách K:** thí nghiệm chính dùng tỉ lệ cố định
-`r ∈ {50%, 25%, 11,1%, 5,6%}` và mức trần tuyệt đối `{64, 128, 256}` để so với
-các paper dùng LLaVA. Phần mở rộng là chọn K thích ứng theo ảnh (dựa trên phân
-bố điểm), và báo cáo số token thực tế giữ lại.
+`r ∈ {100%, 50%, 33,3%, 22,2%, 11,1%, 5,6%}`. Các mức 33,3/22,2/11,1/5,6%
+tương ứng với 192/128/64/32 token của LLaVA (576 token), nên so được trực tiếp
+với các paper. Mức trần tuyệt đối `{64, 128, 256}` chỉ dùng làm phân tích phụ.
+K thích ứng theo từng mẫu được mô tả ở cách 2 và cách 4 trong
+[`approaches/`](approaches/README.md).
 
 ## 5. Can thiệp ở đâu trong sơ đồ
 
@@ -182,7 +185,7 @@ chấm điểm benchmark.
 | --- | --- | --- |
 | H1 | Cắt DeepStack đúng theo `I_keep` tốt hơn bỏ hẳn DeepStack | ablation slice / drop |
 | H2 | Giữ toạ độ M-RoPE gốc tốt hơn đánh số lại thành lưới dày | ablation, xem kỹ câu hỏi không gian của GQA |
-| H3 | Fold vào DeepStack cải thiện chất lượng ở mức giữ ≤ 25% | so có fold / không fold |
+| H3 | Fold vào DeepStack cải thiện chất lượng ở mức giữ ≤ 22,2% | so có fold / không fold |
 | H4 | Tín hiệu multi-level saliency có ích thêm ngoài diversity | bỏ `ms` |
 | H5 | Ở cùng K, cắt token tốt hơn giảm độ phân giải | so với P0. Nếu thua, đó vẫn là phát hiện đáng báo cáo cho model nhỏ |
 
@@ -237,6 +240,6 @@ và POPE. Việc này cần adapter mới và ADR cập nhật protocol dữ li�
 | M2 | Các đối chứng P0 / random / grid / pool ở 4 mức ngân sách | biểu đồ Pareto đầu tiên |
 | M3 | FastV, DivPrune, CDPruner trên Qwen3-VL-2B | tái hiện được xu hướng của paper |
 | M4 | Nghiên cứu DeepStack + vị trí (H1, H2) | đóng góp (1) |
-| M5 | DSFold đầy đủ (H3, H4) | thắng baseline tốt nhất ở mức giữ ≤ 25%, CI không chứa 0 |
+| M5 | DSFold đầy đủ (H3, H4) | thắng baseline tốt nhất ở mức giữ ≤ 22,2%, CI không chứa 0 |
 | M6 | Benchmark nhiều chữ + POPE, ngân sách thích ứng | chứng minh tính tổng quát |
 | M7 | Viết khoá luận / bài báo | |
