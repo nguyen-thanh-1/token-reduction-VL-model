@@ -127,7 +127,7 @@ DeepStack, merge cả main stream (kiểu ToMe/VisionZip), cả hai, hoặc khô
   decode.
 
 **Ngân sách K:** thí nghiệm chính dùng tỉ lệ cố định
-`r ∈ {100%, 50%, 33,3%, 22,2%, 11,1%, 5,6%}`. Các mức 33,3/22,2/11,1/5,6%
+`r ∈ {100%, 75%, 50%, 33,3%, 22,2%, 11,1%, 5,6%}` (7 mức). Các mức 33,3/22,2/11,1/5,6%
 tương ứng với 192/128/64/32 token của LLaVA (576 token), nên so được trực tiếp
 với các paper. Mức trần tuyệt đối `{64, 128, 256}` chỉ dùng làm phân tích phụ.
 K thích ứng theo từng mẫu được mô tả ở cách 2 và cách 4 trong
@@ -237,7 +237,7 @@ và POPE. Việc này cần adapter mới và ADR cập nhật protocol dữ li�
 | Mốc | Sản phẩm | Điều kiện hoàn thành |
 | --- | --- | --- |
 | M1 | Wrapper + kiểm chứng NoOp + đo thời gian từng giai đoạn | trùng khớp baseline trên 100 mẫu |
-| M2 | Các đối chứng P0 / random / grid / pool ở 4 mức ngân sách | biểu đồ Pareto đầu tiên |
+| M2 | Các đối chứng P0 / random / grid / pool ở 7 mức ngân sách | biểu đồ Pareto đầu tiên |
 | M3 | FastV, DivPrune, CDPruner trên Qwen3-VL-2B | tái hiện được xu hướng của paper |
 | M4 | Nghiên cứu DeepStack + vị trí (H1, H2) | đóng góp (1) |
 | M5 | DSFold đầy đủ (H3, H4) | thắng baseline tốt nhất ở mức giữ ≤ 22,2%, CI không chứa 0 |

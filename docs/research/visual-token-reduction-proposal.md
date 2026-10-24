@@ -222,7 +222,7 @@ average pooling.
 k = 3), DivPrune, CDPruner, DART, and VisionZip adapted without [CLS] (state
 the adaptation).
 
-**Budgets:** retention ratios {100%, 50%, 33.3%, 22.2%, 11.1%, 5.6%} of `N_visual` per image (33.3–5.6% match LLaVA 192/128/64/32 of 576),
+**Budgets:** retention ratios {100%, 75%, 50%, 33.3%, 22.2%, 11.1%, 5.6%} of `N_visual` per image (33.3–5.6% match LLaVA 192/128/64/32 of 576),
 plus absolute caps {64, 128, 256} tokens for comparison with LLaVA-style
 papers.
 
@@ -274,7 +274,7 @@ which tokens get kept (compare with FEATHER).
 | # | Deliverable | Exit criterion |
 | --- | --- | --- |
 | M1 | Pruned-inference wrapper + NoOp equivalence + stage timing | identical predictions to baseline on 100 samples |
-| M2 | Controls (resolution, random, grid, pool) at 4 budgets | first quality–cost Pareto plot |
+| M2 | Controls (resolution, random, grid, pool) at 7 budgets | first quality–cost Pareto plot |
 | M3 | FastV, DivPrune, CDPruner on Qwen3-VL-2B | reproduced trends from papers |
 | M4 | DeepStack study (H1, H2) | answer to "how to prune with DeepStack" — paper core #1 |
 | M5 | DSFold select + fold (H3, H4) | beats best baseline at ≤ 22.2% retained, CI excludes 0 |

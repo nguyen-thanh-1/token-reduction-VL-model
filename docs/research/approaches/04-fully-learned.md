@@ -1,109 +1,160 @@
-# Cách 4 — Học toàn bộ: mạng quyết cả "bao nhiêu" lẫn "token nào"
+# Cách 4 — Học toàn bộ: cổng học được quyết cả "bao nhiêu" lẫn "token nào"
 
-- Trạng thái: Đề xuất (**hướng phát triển**; chỉ làm nếu cách 1–3 xong sớm)
-- Bao nhiêu token: **học** · Token nào: **học**
-- Điều kiện: cách huấn luyện A của cách 3 đã chạy được; GPU đủ VRAM
+- Trạng thái: Đề xuất (**hướng phát triển**; chỉ triển khai nếu cách 1–2 xong sớm và còn ≥ 3–4 tuần)
+- Bao nhiêu token: **học** · Token nào: **học** · Fold DeepStack (S3–S4 của cách 1): **giữ nguyên**
+- Điều kiện: custom 4D attention mask đã chạy được (spike ở cách 3, mục 5.2); có kiến trúc 3c
+- Ký hiệu và giao thức chung: [`README.md`](README.md)
 
-## 1. Ý tưởng
+## 1. Bài toán
 
-Một mạng duy nhất dự đoán cho mỗi visual token một **xác suất được giữ**
-`π_i`. Tổng các xác suất chính là số token kỳ vọng:
+Một mạng `s_θ` gán cho mỗi visual token i một **cổng** `z_i ∈ [0, 1]`:
+- `z_i = 0` nghĩa là bỏ;
+- `z_i = 1` nghĩa là giữ.
 
+Số token giữ lại `K = Σ_i 1[z_i > 0]` **không cố định** mà do mạng tự quyết cho
+từng mẫu. Mạng được huấn luyện để cân bằng hai mục tiêu:
+- **utility**: câu trả lời khi cắt gần nhất với câu trả lời full-token;
+- **rate**: dùng càng ít token càng tốt.
+
+Đây là khung **rate–utility**, giống RUTA (2608.04132). Điểm khác chính:
+token bị bỏ vẫn được **Fold vào DeepStack** của token giữ lại, và mạng nhận
+đặc trưng DeepStack.
+
+## 2. Kiến trúc
+
+- Thân mạng giống **3c** (cách 3, mục 3c), gồm `u_i` (467 chiều), self-attention,
+  cross-attention tới câu hỏi và FFN. **Không** đưa `log r` vào, vì ở đây r do
+  mạng tự quyết.
+- Đầu ra cho mỗi token là `log α_i = Linear(256 → 1)(LN(h_i))`: tham số vị trí
+  của phân phối hard-concrete (mục 3).
+- Tham số: **khoảng 2,6M**.
+- Khởi tạo: trọng số của cách 3 (nếu có), với bias đầu ra đặt sao cho
+  `P(z_i > 0) ≈ 0,5` cho mọi token lúc bắt đầu.
+
+## 3. Cổng hard-concrete (Louizos và cộng sự, ICLR 2018)
+
+Phân phối hard-concrete cho phép z có xác suất dương **đúng bằng 0** hoặc **đúng
+bằng 1**, đồng thời vẫn lấy được đạo hàm nhờ reparameterization.
+
+**Lúc huấn luyện (lấy mẫu):**
 ```
+u_i  ~ Uniform(0, 1)
+c_i  = σ( (log u_i − log(1 − u_i) + log α_i) / β )            β = 2/3
+c̄_i  = c_i · (ζ − γ) + γ                                       γ = −0,1,  ζ = 1,1
+z_i  = min(1, max(0, c̄_i))                                     # z ∈ [0, 1], có khối xác suất tại 0 và 1
+```
+
+**Xác suất cổng mở (khả vi theo `log α`):**
+```
+π_i = P(z_i > 0) = σ( log α_i − β · log(−γ / ζ) )
 E[K] = Σ_i π_i
 ```
 
-Mạng được huấn luyện để vừa giữ chất lượng câu trả lời, vừa dùng ít token nhất
-có thể. Như vậy K tự thích ứng theo từng mẫu, và token nào được giữ cũng do
-mạng quyết định. Đây là khung **rate–utility** giống RUTA (2608.04132).
-
-## 2. Vị trí trên sơ đồ
-
-Mạng thay cả hai ô **"Budget" và "S1 (Score)"** trong khối "2½. DSFold".
-- S2 trở thành "lấy mẫu hoặc ngưỡng hoá các gate".
-- S3–S4 (Assign, Fold DeepStack) **giữ nguyên**. Đây là điểm khác chính so với RUTA.
-
-## 3. Kiến trúc
-
-- Thân mạng: giống cách 3c (1 lớp transformer nhẹ có cross-attention tới câu
-  hỏi), khoảng 4M tham số.
-- Hai đầu ra:
-  - **gate head:** `π_i = sigmoid(s_i)` cho từng token;
-  - **ngân sách ngầm định:** không cần đầu ra riêng, vì `E[K] = Σ π_i`.
-- Tuỳ chọn: thêm một đầu ra dự đoán độ khó toàn cục để điều chỉnh nhiệt độ
-  của các gate.
-
-## 4. Huấn luyện
-
-### 4.1 Gate khả vi
-
-- **Lúc huấn luyện:** Bernoulli relaxation (Gumbel-sigmoid hoặc hard-concrete)
-  cho `z_i ∈ {0, 1}`, kết hợp straight-through.
-- **Đưa vào model:** như mặt nạ mềm ở cách 3. Cộng `log(z_i + ε)` vào
-  attention logits của các key ở vị trí ảnh, và nhân DeepStack của token với
-  `z_i`.
-- **Lúc suy luận:** giữ token có `π_i ≥ 0,5`, hoặc giữ `⌈Σπ_i⌉` token có `π`
-  cao nhất. Sau đó áp Fold DeepStack cho các token bị bỏ.
-
-### 4.2 Hàm mục tiêu rate–utility
-
+**Lúc suy luận (tất định):**
 ```
-L = KL( p_full(ans) ‖ p_pruned(ans) )            # utility: giữ hành vi full-token
-  + μ · CE(ans_gt)                               # tuỳ chọn: theo đáp án đúng
-  + λ · (Σ_i π_i) / N_visual                     # rate: phạt tỉ lệ token dùng
-  + η · ‖π − π_DPP‖                              # tuỳ chọn: neo theo lời giải DSFold
+ẑ_i    = min(1, max(0, σ(log α_i) · (ζ − γ) + γ))
+I_keep = { i : ẑ_i ≥ 0,5 }
+nếu |I_keep| < K_min = ⌈0,056 · N⌉:  lấy K_min token có log α lớn nhất
+nếu |I_keep| > N:                    không xảy ra
 ```
 
-- Quét **λ** cho ra cả đường Pareto (mỗi λ cho một tỉ lệ giữ trung bình).
-- Số hạng neo theo DPP giúp mạng khởi đầu từ lời giải của cách 1, nên ổn định
-  hơn và ít overfit hơn.
+`K_min` giữ cho phương pháp nằm trong khoảng ngân sách đã đánh giá (≥ L1).
 
-### 4.3 Dữ liệu và chi phí (ước tính)
+## 4. Đưa cổng vào LLM lúc huấn luyện
 
-- 50k–100k mẫu GQA train, khởi tạo từ trọng số của cách 3 (nếu đã có).
-- Backprop qua model 2B đóng băng: khoảng 10–16 GB VRAM với gradient
-  checkpointing (cần đo).
-- Khoảng **1–2 ngày** cho mỗi giá trị λ. Với 4–5 giá trị λ thì cần khoảng
-  **3–5 ngày GPU**.
+Giống cách 3, tuyến A (mục 5.2), nhưng **không cần straight-through**, vì
+`z_i` đã khả vi theo `log α_i`:
 
-## 5. Vì sao không dùng RL (nhắc lại)
+- **Attention bias:** cộng `b_i = log(z_i + ε)`, với ε = 1e-4, vào logits của
+  key tại vị trí ảnh i, ở mọi layer và head (custom 4D float mask).
+- **Main stream:** giữ `v_i`. Việc "bỏ" được thực hiện qua attention bias.
+- **DeepStack:** `z_i · f_l[i]`.
+- **Fold:** tính từ tập cứng `{i : z_i > 0}` của mẫu hiện tại, tách khỏi gradient.
+  Fold chỉ cộng vào token đang mở.
 
-Ở đây gate có thể được làm khả vi bằng relaxation, nên gradient đi thẳng từ
-loss tới mạng. Gradient này **ít nhiễu hơn nhiều** so với policy gradient của
-RL.
+Lúc suy luận thì **xoá thật** token theo `I_keep`, rồi lắp vào model theo
+README mục 4.
 
-RL chỉ cần thiết khi quyết định là một chuỗi nhiều bước không khả vi, ví dụ
-model tự xin thêm độ phân giải trong lúc suy luận (VisionThink) hay chọn lấy lại
-token trong lúc decode (ViMoD). Các hướng đó nằm ngoài phạm vi khoá luận này.
+## 5. Hàm mục tiêu
 
-## 6. Thí nghiệm
+```
+L = (1/A) Σ_{t=1..A} KL( p_T(·|y_{<t}) ‖ p_S(·|y_{<t}) )          (1) utility: giữ hành vi full-token
+  + μ · CE(y_gt)                                                    (2) tuỳ chọn, mặc định μ = 0
+  + λ · E[K] / N                                                    (3) rate: phạt tỉ lệ token kỳ vọng
+  + η · (1/N²) Σ_{i≠j} π_i π_j · max(0, S_ij − s₀)                  (4) chống trùng lặp khả vi, s₀ = 0,8
+  + κ(t) · BCE( π, 1[i ∈ I_DPP] )                                   (5) neo theo lời giải DSFold
+```
+
+Giải thích từng thành phần:
+
+1. **KL** so với teacher full-token, tính trên A ≤ 8 token trả lời của
+   teacher (teacher-forced). Teacher được tính trước, lưu top-64 logit.
+2. **CE** theo đáp án đúng. Tắt mặc định để mục tiêu là "giữ hành vi baseline".
+3. **Rate:** λ càng lớn thì mạng càng tiết kiệm. **Mỗi giá trị λ cho một điểm**
+   trên đường Pareto.
+4. **Chống trùng lặp:** phạt việc mở đồng thời hai token rất giống nhau
+   (`S_ij = cos(v_i, v_j) > 0,8`). Đây là thay thế khả vi cho DPP.
+5. **Neo theo DPP:** `I_DPP` là lựa chọn của DSFold (cách 1) ở mức L3 = 22,2%.
+   κ(t) giảm dần về 0 (mục 6), để mạng khởi đầu từ một lời giải tốt rồi tự điều chỉnh.
+
+## 6. Lịch huấn luyện
+
+| Giai đoạn (% số bước) | λ | κ | Mục đích |
+| --- | --- | --- | --- |
+| 0–10% | 0 | 1 | học bắt chước DSFold, chưa ép tiết kiệm |
+| 10–30% | tăng tuyến tính 0 → λ_target | 1 → 0,5 | bắt đầu cân bằng rate |
+| 30–50% | λ_target | 0,5 → 0 | bỏ dần neo |
+| 50–100% | λ_target | 0 | tối ưu rate–utility thuần |
+
+| Thiết lập | Giá trị |
+| --- | --- |
+| λ_target | {0,25; 0,5; 1; 2; 4}, mỗi giá trị huấn luyện riêng |
+| η | 0,1 |
+| Tối ưu | AdamW, lr 1e-4, batch hiệu dụng 8, 2 epoch trên 50k mẫu GQA train |
+| Bộ nhớ | bf16 + gradient checkpointing; ước tính 10–16 GB VRAM (phải đo) |
+| Thời gian | khoảng 10 giờ mỗi λ ⇒ khoảng 50 giờ cho 5 giá trị λ, cộng teacher khoảng 2 giờ. Tổng **khoảng 3–5 ngày GPU** |
+| Chọn checkpoint | theo `agree` trên 2.000 câu GQA val ở mỗi λ |
+
+## 7. Các chế độ hỏng thường gặp và cách phát hiện
+
+| Hiện tượng | Dấu hiệu theo dõi | Xử lý |
+| --- | --- | --- |
+| Mọi cổng đóng (K → K_min) | `E[K]/N` giảm nhanh, KL tăng vọt | giảm λ; kéo dài giai đoạn neo |
+| Mọi cổng mở (K → N) | `E[K]/N` ≈ 1 | tăng λ; kiểm tra khởi tạo bias |
+| Cổng không quyết đoán (π ≈ 0,5) | histogram π tập trung quanh 0,5 | giảm β (nhiệt độ) về 0,5 ở nửa sau |
+| Chọn token trùng nhau | trung bình `S_ij` giữa các token giữ lại cao hơn DSFold | tăng η |
+| Lệch train/test | `agree` khi xoá thật thấp hơn rõ so với khi dùng bias | so sánh hai chế độ trên GQA val; tăng độ lớn bias (ε nhỏ hơn) |
+
+## 8. Thí nghiệm
 
 | Câu hỏi | So sánh |
 | --- | --- |
-| Học toàn bộ có hơn kết hợp "budget head + DSFold" (cách 2) không? | cùng tỉ lệ giữ trung bình |
-| Fold DeepStack có còn giúp khi đã học gate không? | có / không có S4 |
-| Neo theo DPP có cần không? | η = 0 / η > 0 |
+| Học toàn bộ có hơn cách 2 (budget head + DSFold) không? | cùng `r̄` thực tế, dùng nội suy đường Pareto (cách 2, mục 9) |
+| Fold còn giúp khi đã học cổng không? | có / không có S3–S4 |
+| Neo DPP và số hạng chống trùng lặp có cần không? | κ ≡ 0; η = 0 |
 | Tổng quát hoá | GQA → MMBench, MME |
-| So với RUTA | so với số liệu RUTA báo cáo trên Qwen3-VL-8B (khác kích thước model, ghi rõ) |
+| So với RUTA | chỉ so định tính với số liệu RUTA báo cáo (Qwen3-VL-8B, khác kích thước model; ghi rõ) |
 
-## 7. Rủi ro
+## 9. Rủi ro
 
-| Rủi ro | Mức độ | Giảm thiểu |
+| Rủi ro | Mức | Giảm thiểu |
 | --- | --- | --- |
-| Huấn luyện không ổn định (gate về toàn 0 hoặc toàn 1) | cao | khởi tạo từ cách 3; tăng λ dần theo lịch; neo theo DPP |
-| Tốn GPU nhất trong 4 cách | cao | làm sau cùng; ít giá trị λ |
-| Cạnh tranh trực tiếp với RUTA | cao | điểm khác: Fold DeepStack, tín hiệu DeepStack, model nhỏ 2B |
-| Overfit GQA | trung bình | neo theo DPP; đánh giá ngoài miền |
+| Huấn luyện không ổn định | cao | lịch ở mục 6; theo dõi mục 7 |
+| Tốn GPU nhất | cao | ít giá trị λ; dùng 25k mẫu trước |
+| Cạnh tranh trực tiếp với RUTA | cao | điểm khác: Fold DeepStack, đặc trưng DeepStack, model 2B, neo DPP |
+| Overfit GQA | trung bình | neo DPP, chống trùng lặp, đánh giá ngoài miền |
 
-## 8. Đóng góp nếu làm
+## 10. Đóng góp nếu làm được
 
-- Khung rate–utility có **Fold DeepStack**: token bị bỏ vẫn đóng góp qua kênh
-  DeepStack, khác RUTA (RUTA gộp vào các anchor token ở main stream).
-- So sánh ba mức học trên cùng một khung, cùng dữ liệu và cùng đối chứng:
-  không học (cách 1), học một phần (cách 2, 3), học toàn bộ (cách 4).
+- Khung rate–utility có **Fold DeepStack** và đặc trưng DeepStack cho Qwen3-VL.
+- So sánh có hệ thống trên cùng một khung, cùng dữ liệu và cùng đối chứng, theo
+  ba mức học:
+  - không học (cách 1);
+  - học một phần (cách 2, 3);
+  - học toàn bộ (cách 4).
 
-## 9. Khuyến nghị
+## 11. Khuyến nghị cho khoá luận
 
-Trong khoá luận, cách 4 nên được trình bày ở phần **hướng phát triển**, kèm
-thiết kế ở trên. Chỉ triển khai nếu cách 1 và 2 đã có kết quả đầy đủ trước
-thời hạn và còn ít nhất khoảng 3–4 tuần.
+Trình bày cách 4 ở chương **hướng phát triển**, gồm thiết kế ở mục 2–6 và lý do
+chưa triển khai (chi phí, rủi ro). Chỉ triển khai khi cách 1 và 2 đã có đủ kết
+quả trên cả 3 benchmark.
