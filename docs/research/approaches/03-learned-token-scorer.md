@@ -4,6 +4,57 @@
 - Bao nhiêu token: **r cố định** (7 mức) · Token nào: **điểm học được + DPP + Fold** (S2–S4 của cách 1 giữ nguyên)
 - Ký hiệu và giao thức chung: [`README.md`](README.md)
 
+## 0. Tóm tắt nhanh
+
+**Một câu:** giữ nguyên toàn bộ DSFold (DPP, Assign, Fold), chỉ thay **công
+thức chấm điểm token** ở S1 bằng một **mạng nhỏ học được**. Mạng này nhận
+nhiều đặc trưng hơn cho mỗi token (main stream, 3 tầng DeepStack, vị trí, câu
+hỏi).
+
+**Học thế nào (khuyến nghị):** tuyến B. Với mỗi câu GQA train, chạy full token
+một lần, lấy **saliency** của từng token (token đó ảnh hưởng tới câu trả lời
+bao nhiêu), rồi dạy mạng **xếp hạng** token giống saliency.
+
+### 0.1 Các mức ngân sách dùng trong cách này
+
+Giống cách 1: **r cố định**, chạy riêng từng mức. Một mạng dùng chung cho mọi
+mức, nhờ có đặc trưng `log r`.
+
+| Mức | L7 | L6 | L5 | L4 | L3 | L2 | L1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **r** | **100%** | **75%** | **50%** | **33,3%** | **22,2%** | **11,1%** | **5,6%** |
+| `log r` đưa vào mạng | 0 | −0,288 | −0,693 | −1,099 | −1,504 | −2,197 | −2,890 |
+| Dùng khi huấn luyện tuyến A | không | không | có | có | có | có | có |
+
+Ở tuyến A, mỗi bước huấn luyện lấy ngẫu nhiên một mức trong L1–L5. L6 và L7
+gần như không mất thông tin nên không cần học. Lúc đánh giá thì chạy cả 7 mức
+như cách 1.
+
+### 0.2 Luồng dữ liệu (lúc suy luận)
+
+```mermaid
+flowchart LR
+  A["ViT: v, f₁..f₃<br/>N×2048 mỗi tensor"] --> U["Đặc trưng token u_i<br/>N×467"]
+  S["rel, ms (cách 1)"] --> U
+  P["toạ độ (row, col)"] --> U
+  R["log r"] --> U
+  U --> NET["Score head<br/>3a MLP / 3b CNN / 3c Transformer"]
+  Qn["Câu hỏi q"] --> NET
+  NET --> QH["q̂ = softplus(s) + 1e-3<br/>N"]
+  QH --> DPP["Greedy DPP (cách 1, S2)<br/>L = diag(q̂)·S·diag(q̂)"]
+  DPP --> REST["Assign + Fold + lắp vào LLM<br/>(giống cách 1)"]
+```
+
+### 0.3 Ví dụ số: chi phí của score head trên ảnh GQA trung vị (N = 260)
+
+| Kiến trúc | Phép tính chính | MAC ước tính | So với LLM prefill ở L3 (119 GMAC) |
+| --- | --- | ---: | ---: |
+| 3a MLP | 260 × (979·512 + 512·256) + các projection 260 × (2048·256 + 3·2048·64) | ≈ 0,40 GMAC | ≈ 0,3% |
+| 3b CNN | 3 conv 3×3 trên lưới 20×13: 3 × 260 × 9 × 256 × 256 + các projection | ≈ 0,73 GMAC | ≈ 0,6% |
+| 3c Transformer | self-attention 260² × 256 + cross-attention + FFN + các projection | ≈ 0,68 GMAC | ≈ 0,6% |
+
+Cả ba đều rẻ hơn rất nhiều so với một decoder layer (≈ 4,2 GMAC ở N_total′ = 84).
+
 ## 1. Bài toán
 
 Ở cách 1, điểm chất lượng là một công thức cố định:

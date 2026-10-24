@@ -6,6 +6,65 @@
 - Điều kiện bắt đầu: cách 1 đạt M5, và bộ tham số DSFold đã khoá
 - Ký hiệu và giao thức chung: [`README.md`](README.md)
 
+## 0. Tóm tắt nhanh
+
+**Một câu:** thêm một MLP nhỏ (khoảng 0,66M tham số) nhìn vào thống kê của ảnh
+và câu hỏi, rồi **chọn cho mỗi mẫu một trong 7 mức ngân sách**. Sau đó DSFold
+(cách 1, không đổi gì) chọn và fold đúng số token đó.
+
+**Học thế nào:** chạy DSFold ở cả 7 mức trên 50.000 câu GQA train, ghi lại mức
+nào còn trả lời giống full-token, rồi học có giám sát. Không cần RL, không cần
+gradient qua VLM.
+
+### 0.1 Các mức là "hành động" của budget head
+
+Budget head không xuất ra một số thực, mà **chọn một mức** trong bảng sau:
+
+| Lựa chọn của budget head | L1 | L2 | L3 | L4 | L5 | L6 | L7 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **r** | **5,6%** | **11,1%** | **22,2%** | **33,3%** | **50%** | **75%** | **100%** |
+| Đầu ra tương ứng của mạng | `p_1` | `p_2` | `p_3` | `p_4` | `p_5` | `p_6` | (luôn đủ, không cần dự đoán) |
+| K nếu ảnh có N = 260 (GQA trung vị) | 15 | 29 | 58 | 87 | 130 | 195 | 260 |
+
+`p_m` là xác suất mạng dự đoán rằng mức m **đã đủ** để giữ câu trả lời như
+full-token. Quy tắc chọn: lấy **mức nhỏ nhất** có `p_m ≥ θ` (mục 8).
+
+### 0.2 Luồng dữ liệu
+
+```mermaid
+flowchart LR
+  A["ViT: v, f₁..f₃"] --> S1["DSFold S1<br/>rel, ms, quality"]
+  S1 --> D["Greedy DPP một lần tới K(L6)<br/>→ thứ tự sel, d2, ρ₁..ρ₆"]
+  A --> F["Đặc trưng x (403 chiều)"]
+  S1 --> F
+  D --> F
+  Qn["Câu hỏi q"] --> F
+  F --> B["Budget head (MLP)<br/>p₁ ≤ … ≤ p₆"]
+  B --> M["m* = mức nhỏ nhất có p_m ≥ θ"]
+  M --> K["K = ⌈r_{m*}·N⌉ ; I_keep = sort(sel[:K])"]
+  D --> K
+  K --> S34["DSFold S3–S4 (Assign, Fold)"] --> LLM["LLM"]
+```
+
+### 0.3 Ví dụ minh hoạ hai mẫu trái ngược nhau
+
+⚠️ Các giá trị `p_m` dưới đây là **minh hoạ** để giải thích cơ chế. Chúng
+không phải số đo.
+
+| | Mẫu A (dễ) | Mẫu B (khó) |
+| --- | --- | --- |
+| Câu hỏi | "Is it overcast?" (GQA, semantic = global) | "What is written on the sign?" |
+| N | 260 | 260 |
+| Cờ loại câu hỏi | không có | đọc chữ = 1 |
+| `rel` | khá đều (câu hỏi về toàn cảnh): entropy cao | tập trung ở vùng biển hiệu: entropy thấp |
+| Đường cong DPP `ρ_m` | giảm nhanh: ảnh "bão hoà" sớm | giảm chậm: còn nhiều chi tiết khác nhau |
+| `p_1 … p_6` | 0,84 · 0,90 · 0,95 · 0,97 · 0,98 · 0,99 | 0,10 · 0,22 · 0,41 · 0,63 · 0,86 · 0,95 |
+| Mức chọn với θ = 0,8 | **L1** (K = 15) | **L5** (K = 130) |
+| N_total′ | 26 + 15 = 41 | 26 + 130 = 156 |
+
+Cả hai mẫu đều dùng ít token hơn full, nhưng mẫu khó được giữ nhiều hơn hẳn.
+Với r cố định ở L3 (K = 58), mẫu A lãng phí 43 token, còn mẫu B có thể bị thiếu.
+
 ## 1. Bài toán
 
 Cách 1 dùng cùng một r cho mọi mẫu. Nhưng mức token **đủ dùng** khác nhau giữa các mẫu:
@@ -191,9 +250,12 @@ Chất lượng của budget head (trên GQA val):
 
 ## 12. Phân tích
 
-- Phân bố `m*` theo benchmark và theo loại câu hỏi. Dùng `category` trong
-  canonical record (MME có category; với GQA, nếu metadata nguồn có loại câu
-  hỏi thì dùng, nếu không thì dùng 3 cờ từ khoá ở mục 4).
+- Phân bố `m*` theo benchmark và theo loại câu hỏi:
+  - GQA: `metadata.types.structural` (testdev có: query 6.805, verify 2.252,
+    logical 1.803, choose 1.129, compare 589) và `metadata.types.semantic`
+    (rel 5.308, attr 5.186, cat 1.149, obj 778, global 157);
+  - MME: `category`;
+  - MMBench: `category`.
 - Tương quan giữa `m*` với `N`, `ρ_m` và các cờ loại câu hỏi.
 - Ví dụ minh hoạ mẫu được chọn L1 và mẫu được chọn L6/L7 (đưa vào failure gallery).
 

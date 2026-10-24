@@ -6,6 +6,9 @@
 - Vị trí can thiệp chung: **P2**, sau Final 2×2 PatchMerger, trước `masked_scatter`
   (sơ đồ: [`architecture/dsfold-proposal/`](../../../architecture/dsfold-proposal/))
 
+> **7 mức ngân sách:** L7 = 100% · L6 = 75% · L5 = 50% · L4 = 33,3% · L3 = 22,2% · L2 = 11,1% · L1 = 5,6%.
+> Bảng đầy đủ kèm số token thật của từng benchmark nằm ở [mục 6](#6-các-mức-ngân-sách-7-mức-cố-định).
+
 File này chứa mọi thứ **dùng chung** cho cả 4 cách: ký hiệu, thông số model,
 cách lắp token đã cắt vào model, công thức chi phí, mức ngân sách, giao thức dữ
 liệu và đánh giá. Mỗi file cách 1–4 chỉ mô tả phần riêng của nó và tham chiếu
@@ -175,24 +178,91 @@ lm_head        = 2048 · 151.936 ≈ 311M   (chỉ vị trí cuối)
 Báo cáo **riêng từng phần** (ViT, LLM prefill, decode) và tổng. Không được gọi
 "giảm x% token" là "giảm x% thời gian".
 
-## 6. Mức ngân sách cố định (7 mức)
+**Lưu ý:** ViT của Qwen3-VL dùng attention **đầy đủ trong mỗi ảnh**
+(`cu_seqlens` theo ảnh, không chia cửa sổ như Qwen2.5-VL). Vì vậy
+`attention_ViT` tăng theo **bình phương** số patch.
 
-| Mức | `r` | Tương ứng LLaVA (576 token) | Mục đích |
-| --- | ---: | ---: | --- |
-| L7 | 100% | 576 | kiểm chứng: trùng baseline |
-| L6 | 75% | 432 | cắt nhẹ: tìm điểm chất lượng bắt đầu giảm |
-| L5 | 50% | 288 | mức các paper Qwen2.5-VL hay báo cáo |
-| L4 | 33,3% | 192 | chuẩn paper LLaVA |
-| L3 | 22,2% | 128 | chuẩn paper LLaVA |
-| L2 | 11,1% | 64 | chuẩn paper LLaVA |
-| L1 | 5,6% | 32 | cắt rất mạnh |
+### 5.1 Chi phí prefill cụ thể cho ảnh điển hình (GMAC, tính theo công thức trên)
 
-- `K = clip(⌈r·N⌉, 1, N)`, tính riêng cho từng ảnh.
-- **Quét dày trên tập dev** trước khi chạy full: r ∈ {100, 90, 75, 60, 50, 40,
-  33,3, 25, 22,2, 15, 11,1, 5,6}% để tìm điểm gãy.
-- Mức trần tuyệt đối {64, 128, 256} token chỉ dùng làm **phân tích phụ**.
-- Cách 2 và cách 4 có K thay đổi theo mẫu, nên được so ở cùng **tỉ lệ giữ trung
-  bình thực tế** `r̄ = (Σ K) / (Σ N)` trên từng benchmark.
+| Ảnh | Lưới H′×W′ | N | N_text | ViT (không đổi) | Full: LLM / tổng | L5 50%: tổng (giảm) | L3 22,2%: tổng (giảm) | L1 5,6%: tổng (giảm) |
+| --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |
+| GQA trung vị | 20×13 | 260 | 26 | 393 | 408 / 801 | 615 (−23%) | 512 (−36%) | 451 (−44%) |
+| MMB trung vị | 16×11 | 176 | 52 | 255 | 324 / 579 | 453 (−22%) | 385 (−34%) | 342 (−41%) |
+| MME trung vị | 24×16 | 384 | 34 | 618 | 599 / 1.218 | 940 (−23%) | 788 (−35%) | 698 (−43%) |
+| MME P95 | 94×126 | 11.844 | 34 | **125.820** (attention 110.321) | 24.830 / 150.650 | 136.248 (−10%) | 129.985 (−14%) | 126.823 (−16%) |
+
+Ba kết luận từ bảng:
+1. Với ảnh nhỏ và vừa, cắt về 22,2% giảm khoảng **71%** chi phí LLM nhưng chỉ
+   khoảng **35%** tổng chi phí prefill, vì ViT chiếm khoảng một nửa.
+2. Với ảnh rất lớn, **attention của ViT chiếm hơn 70%** tổng chi phí. Cắt token
+   sau ViT (P2) gần như không giúp; chỉ giảm độ phân giải (P0) hoặc cắt trong
+   ViT (P1) mới giảm được phần này. Đây là lý do P0 là đối chứng **bắt buộc**,
+   và kết quả MME phải được **chia theo nhóm kích thước** (N ≤ 512, 512 < N ≤ 4.096, N > 4.096).
+3. KV cache giảm đúng theo tỉ lệ `N_total′ / N_total`. Ví dụ GQA trung vị: từ
+   32,0 MB xuống 9,4 MB ở L3; MME P95: từ 1,33 GB xuống 0,30 GB.
+
+## 6. Các mức ngân sách (7 mức cố định)
+
+### 6.1 Danh sách mức
+
+| Mức | `r` (tỉ lệ giữ) | Tỉ lệ cắt | Tương ứng LLaVA (576 token) | Vì sao có mức này |
+| --- | ---: | ---: | ---: | --- |
+| **L7** | **100%** | 0% | 576 | kiểm chứng: phải trùng baseline từng ký tự |
+| **L6** | **75%** | 25% | 432 | lấp khoảng 100 → 50%; tìm điểm chất lượng bắt đầu giảm; cho budget head một lựa chọn "an toàn" |
+| **L5** | **50%** | 50% | 288 | mức nhẹ, các paper trên Qwen2.5-VL hay báo cáo |
+| **L4** | **33,3%** | 66,7% | 192 | mức chuẩn của các paper (FastV, SparseVLM, VisionZip …) |
+| **L3** | **22,2%** | 77,8% | 128 | mức chuẩn của các paper; **mức dùng để chỉnh tham số** |
+| **L2** | **11,1%** | 88,9% | 64 | mức chuẩn của các paper |
+| **L1** | **5,6%** | 94,4% | 32 | cắt rất mạnh |
+
+Quy tắc tính cho từng ảnh: `K = clip(⌈r · N⌉, 1, N)`.
+Ví dụ N = 260 và r = 22,2% thì K = ⌈57,7⌉ = 58.
+
+### 6.2 Số token thật ở từng mức
+
+Số liệu dưới đây tính từ `outputs/baseline/*.jsonl`: `N = input_tokens − N_text`,
+trong đó `N_text` đếm bằng tokenizer của checkpoint trên đúng prompt đã chạy.
+
+**Phân bố N_visual của từng benchmark:**
+
+| Benchmark | Số mẫu | N_text TB | N TB | N nhỏ nhất | N P5 | **N trung vị** | N P95 | N lớn nhất |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| GQA testdev | 12.578 | 25,7 | 268,4 | 96 | 165 | **260** | 340 | 400 |
+| MMBench val | 4.329 | 73,1 | 155,3 | 64 | 65 | **176** | 256 | 256 |
+| MME test | 2.374 | 34,3 | 1.756,2 | 65 | 90 | **384** | 11.844 | 16.320 |
+
+Ba nhận xét ảnh hưởng tới thiết kế:
+1. **MME lệch rất mạnh.** Trung vị chỉ là 384, nhưng có những ảnh tới 16.320
+   token (gần trần `max_pixels`). Trung bình 1.756 là do phần đuôi kéo lên. Khi
+   báo cáo MME phải **chia theo nhóm kích thước ảnh** (mục 5.1).
+2. **MMBench có phần chữ dài** (trung bình 73 token: hint + 4 lựa chọn), chiếm
+   khoảng 32% chuỗi. Cắt token ảnh ở đây tiết kiệm **ít hơn** so với GQA.
+3. **N nhỏ nhất = 64–65** là do `min_pixels = 65.536` (= 64 × 1024).
+
+**K trung bình (và trung vị) ở từng mức:**
+
+| Mức | r | GQA: K TB (trung vị) | GQA: N_total′ TB | MMB: K TB (trung vị) | MMB: N_total′ TB | MME: K TB (trung vị) | MME: N_total′ TB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L7 | 100% | 268,4 (260) | 294,1 | 155,3 (176) | 228,3 | 1.756,2 (384) | 1.790,4 |
+| L6 | 75% | 201,3 (195) | 227,0 | 116,5 (132) | 189,6 | 1.317,3 (288) | 1.351,5 |
+| L5 | 50% | 134,2 (130) | 159,9 | 77,6 (88) | 150,7 | 878,2 (192) | 912,4 |
+| L4 | 33,3% | 89,7 (87) | 115,4 | 52,0 (59) | 125,1 | 585,6 (128) | 619,9 |
+| L3 | 22,2% | 60,0 (58) | 85,7 | 35,0 (40) | 108,0 | 390,6 (86) | 424,9 |
+| L2 | 11,1% | 30,3 (29) | 56,0 | 17,7 (20) | 90,8 | 195,5 (43) | 229,8 |
+| L1 | 5,6% | 15,4 (15) | 41,0 | 9,0 (10) | 82,0 | 98,0 (22) | 132,2 |
+
+Ở L1, một ảnh MMBench trung bình chỉ còn khoảng 9 visual token. Mức này rất
+mạnh, nên dự kiến chất lượng sẽ giảm rõ.
+
+### 6.3 Quy tắc dùng mức
+
+- **Chạy chính:** cách 1 và cách 3 chạy ở cả 7 mức. Trên dev subset 1.000 câu
+  thì chạy cả 7 mức; trên full benchmark thì chạy L6, L5, L4, L3, L2.
+- **Quét dày trên dev subset** (chỉ để tìm điểm gãy, không báo cáo làm kết quả
+  chính): r ∈ {100, 90, 75, 60, 50, 40, 33,3, 25, 22,2, 15, 11,1, 5,6}%.
+- **Cách 2 và cách 4** có K thay đổi theo mẫu. Chúng được so ở cùng **tỉ lệ giữ
+  trung bình thực tế** trên từng benchmark: `r̄ = (Σ K) / (Σ N)`.
+- **Mức trần tuyệt đối** {64, 128, 256} token chỉ là phân tích phụ.
 
 ## 7. Giao thức dữ liệu (theo `configs/data_v1.yaml`)
 

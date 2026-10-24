@@ -7,6 +7,57 @@
   [`README.md`](README.md) mục 2–9. File này chỉ mô tả phần riêng của cách 1.
 - Ánh xạ lên sơ đồ (M1–M8): [`../dsfold-method-proposal.md`](../dsfold-method-proposal.md) mục 5
 
+## 0. Tóm tắt nhanh
+
+**Một câu:** sau khi ViT chạy xong, chọn K token vừa **đa dạng** vừa **liên
+quan tới câu hỏi** bằng DPP; token bị bỏ không mất hẳn mà được **gộp vào kênh
+DeepStack** của token giữ lại gần nó; sau đó đưa K token vào LLM với **toạ độ
+M-RoPE gốc**.
+
+**Không huấn luyện gì.** Chỉ có 5 siêu tham số (α, β, λ, γ, τ), chỉnh một lần
+trên GQA val rồi khoá lại.
+
+### 0.1 Các mức ngân sách dùng trong cách này
+
+Cách 1 chạy **riêng từng mức**, cùng một r cho mọi ảnh:
+
+| Mức | L7 | L6 | L5 | L4 | L3 | L2 | L1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **r** | **100%** | **75%** | **50%** | **33,3%** | **22,2%** | **11,1%** | **5,6%** |
+| K của ảnh GQA trung vị (N = 260) | 260 | 195 | 130 | 87 | 58 | 29 | 15 |
+| K của ảnh MMBench trung vị (N = 176) | 176 | 132 | 88 | 59 | 40 | 20 | 10 |
+| K của ảnh MME trung vị (N = 384) | 384 | 288 | 192 | 128 | 86 | 43 | 22 |
+
+Số liệu đầy đủ (trung bình, P95, `N_total′`) nằm ở README mục 6.2.
+
+### 0.2 Luồng dữ liệu
+
+```mermaid
+flowchart LR
+  A["ViT (không đổi)<br/>v: N×2048<br/>f₁,f₂,f₃: 3×N×2048"] --> S1
+  Q["Câu hỏi<br/>q: N_q×2048"] --> S1
+  S1["S1 Score<br/>rel, ms → quality: N"] --> S2
+  S2["S2 Greedy DPP<br/>I_keep: K chỉ số"] --> S3
+  S3["S3 Assign<br/>a(d): N−K → K"] --> S4
+  S4["S4 Fold<br/>f′: 3×K×2048"] --> S5
+  S2 --> S5
+  S5["S5 Lắp vào LLM<br/>input_ids: N_text+K<br/>position_ids: gather gốc"] --> LLM["28 decoder layer<br/>(không đổi)"]
+```
+
+### 0.3 Ví dụ số với ảnh GQA trung vị, ở L3 (r = 22,2%)
+
+| Bước | Kết quả cụ thể |
+| --- | --- |
+| Ảnh sau resize | 640 × 416 pixel, lưới patch 40 × 26 = 1.040 patch, lưới token 20 × 13 |
+| ViT | `v`: [260, 2048]; `f₁, f₂, f₃`: mỗi cái [260, 2048] |
+| Câu hỏi | "Who is wearing the dress?", sau lọc stopword còn khoảng 3 token: "Who", " wearing", " dress" ⇒ `q`: [3, 2048] |
+| S1 | 260 giá trị `rel`, 260 giá trị `ms`, rồi 260 giá trị `quality` |
+| S2 | K = ⌈0,222 × 260⌉ = **58**. Greedy DPP chạy 58 bước. `I_keep` có 58 chỉ số, `I_drop` có 202 |
+| S3 | 202 token bị bỏ chia cho 58 token giữ, trung bình khoảng 3,5 token mỗi nhóm |
+| S4 | 58 × 3 vector DeepStack được fold. `v′ = v[I_keep]`: [58, 2048] |
+| S5 | `N_total`: 286 → **84**. Tại 58 vị trí ảnh, M-RoPE vẫn mang toạ độ (h, w) gốc trên lưới 20 × 13 |
+| Chi phí | LLM: 408 → 119 GMAC (−71%). ViT giữ nguyên 393 GMAC. Tổng prefill: 801 → 512 GMAC (−36%). KV cache: 32,0 → 9,4 MB |
+
 ## 1. Bài toán
 
 **Cho:** ảnh đã qua ViT (`v`, `f_1`, `f_2`, `f_3`, mỗi tensor `[N, 2048]`), câu
@@ -140,11 +191,27 @@ for t = 0 .. K−1:
 I_keep ← sort(sel)                        # sắp tăng dần để giữ thứ tự raster
 ```
 
-- Độ phức tạp: `O(N·K²)` phép tính và `O(N·K)` bộ nhớ. Với N = 300, K = 67 thì
-  không đáng kể. Với ảnh MME N ≈ 1.750, K = 1.313 (r = 75%) thì khoảng 3·10⁹
-  phép tính trên GPU. Phải đo và báo cáo thời gian riêng.
+- Độ phức tạp: `O(N·K²)` phép tính, bộ nhớ `O(N²)` cho S và `O(N·K)` cho C.
+  - GQA trung vị (N = 260, K = 58 ở L3): khoảng 0,9 triệu phép tính, không đáng kể.
+  - MME trung vị (N = 384, K = 288 ở L6): khoảng 32 triệu phép tính, không đáng kể.
+  - MME lớn nhất (N = 16.320): riêng S đã cần khoảng **1 GB** fp32, và C cần
+    thêm khoảng 0,76 GB ở L6. Như vậy **không khả thi** nếu tính DPP trực tiếp.
 - `rank(S) ≤ 2048`. Nếu K vượt quá rank thực tế, `d2` về 0, và nhánh "bổ sung
   theo quality" xử lý trường hợp này.
+
+### 4.2b Quy tắc cho ảnh lớn (bắt buộc, là một phần của phương pháp)
+
+```
+nếu N ≤ N_cap = 4.096:   DPP chính xác như trên
+nếu N > N_cap:           max–min có trọng số (mục 4.3), không lập ma trận S:
+                         mỗi bước chỉ cập nhật vector min_dist độ dài N
+                         ⇒ bộ nhớ O(N), thời gian O(N·K)
+```
+
+- Tỉ lệ mẫu bị ảnh hưởng: ở GQA và MMBench là 0% (N tối đa là 400 và 256).
+  Ở MME, khoảng trên 5% mẫu (P95 = 11.844). Phải báo cáo đúng con số này.
+- Ablation: chạy DPP chính xác trên tập con các ảnh MME có N > 4.096 (nếu đủ
+  VRAM) để đo mức chênh lệch so với max–min.
 
 ### 4.3 Bộ chọn thay thế (ablation A6)
 
@@ -223,9 +290,13 @@ Theo đúng README mục 4.2 (bước 3–6), với `v′` và `f′_l` vừa t�
 
 ### 9.1 Ma trận chạy chính
 
-Gồm 7 mức r × {Full, P0, Random-K ×3, Grid-K, Pool k×k, FastV k = 2/3, DivPrune,
-CDPruner, **DSFold**} × 3 benchmark. Chạy trước trên dev subset 1.000 câu, rồi
-chạy full ở các mức {75; 50; 33,3; 22,2; 11,1}%.
+| Giai đoạn | Mức | Phương pháp | Dữ liệu |
+| --- | --- | --- | --- |
+| Dev | L7, L6, L5, L4, L3, L2, L1 (cả 7 mức) | Full, P0, Random-K ×3, Grid-K, Pool k×k, FastV k = 2/3, DivPrune, CDPruner, **DSFold** | dev subset 1.000 câu × 3 benchmark |
+| Full | L6 (75%), L5 (50%), L4 (33,3%), L3 (22,2%), L2 (11,1%) | các phương pháp tốt nhất từ giai đoạn dev, cộng P0, Random-K và **DSFold** | toàn bộ GQA testdev, MMBench val, MME test |
+
+Với MME, mọi bảng kết quả có thêm 3 cột chia theo kích thước ảnh: N ≤ 512,
+512 < N ≤ 4.096, N > 4.096 (README mục 5.1).
 
 ### 9.2 Ablation (trên GQA testdev và MME, ở r ∈ {33,3; 11,1}%)
 
@@ -251,13 +322,13 @@ chạy full ở các mức {75; 50; 33,3; 22,2; 11,1}%.
 | --- | --- |
 | `rel`: N × N_q tích vô hướng | không đáng kể |
 | `ms`: 6N phép chuẩn | không đáng kể |
-| `S`: N × N × 2048 | N = 300: khoảng 0,18 GMAC; N = 1.750: khoảng 6,3 GMAC (so với khoảng 2.466 GMAC của LLM prefill ở N_total ≈ 1.750) |
-| Greedy DPP | `O(N·K²)`, tuần tự K bước. Phải đo |
+| `S`: N × N × 2048 | GQA trung vị (N = 260): khoảng 0,14 GMAC. MME trung vị (N = 384): khoảng 0,30 GMAC. So với LLM prefill 408 và 599 GMAC, dưới 0,1% |
+| Greedy DPP | `O(N·K²)`, tuần tự K bước (K ≤ 288 ở ảnh trung vị). Phải đo thời gian thật |
+| Max–min (N > 4.096) | `O(N·K)`, ví dụ N = 11.844, K = 2.632: khoảng 3·10⁷ phép tính mỗi chiều |
 | S3 + S4 | `O((N − K)·K)` + `O(N·2048·3)` |
 
-Nếu đo thấy greedy DPP quá chậm ở r ≥ 50% trên ảnh lớn, có hai phương án:
-dùng max–min cho r ≥ 50%, hoặc chạy DPP trên lưới đã pool 2×2 rồi mở rộng lại.
-Phải ghi rõ trong báo cáo.
+Nếu đo thấy greedy DPP vẫn chậm ở L6 hoặc L5 trên ảnh trung bình, hạ `N_cap`
+xuống (ví dụ 2.048) và ghi rõ trong báo cáo.
 
 ## 11. Tiêu chí thành công
 

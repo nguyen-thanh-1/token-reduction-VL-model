@@ -5,6 +5,58 @@
 - Điều kiện: custom 4D attention mask đã chạy được (spike ở cách 3, mục 5.2); có kiến trúc 3c
 - Ký hiệu và giao thức chung: [`README.md`](README.md)
 
+## 0. Tóm tắt nhanh
+
+**Một câu:** một mạng nhỏ (khoảng 2,6M tham số) cho **mỗi token** một cổng
+đóng/mở. Số cổng mở chính là K, nên K **tự thay đổi theo từng mẫu**. Mạng
+được huấn luyện end-to-end qua model 2B đóng băng, để cân bằng "giữ câu trả
+lời như full-token" và "dùng ít token".
+
+**Khác cách 2:**
+- Cách 2 chọn một trong 7 mức rồi để DSFold chọn token.
+- Cách 4 không có mức rời rạc: mạng quyết **cả hai** việc.
+
+### 0.1 Các mức ngân sách trong cách này
+
+Cách 4 **không chọn mức** lúc suy luận: K là số cổng mở, có thể là bất kỳ số
+nào trong `[K_min, N]`. Các mức L1–L7 chỉ xuất hiện ở bốn chỗ:
+
+| Chỗ dùng | Mức | Vai trò |
+| --- | --- | --- |
+| Chặn dưới | L1 = 5,6% ⇒ `K_min = ⌈0,056·N⌉` | không bao giờ giữ ít hơn mức nhỏ nhất đã đánh giá |
+| Neo lúc huấn luyện | L3 = 22,2% | `I_DPP` là lựa chọn của DSFold ở L3 (số hạng (5) trong mục 5) |
+| Điểm vận hành | λ ∈ {0,25; 0,5; 1; 2; 4} ⇒ mỗi λ cho một `r̄` thực tế | các `r̄` này được so với đường của cách 1 và cách 2 |
+| So sánh | đường nội suy qua L1–L7 của cách 1 | xem mạng nằm trên hay dưới đường đó |
+
+Kỳ vọng định tính (phải đo): λ = 0,25 cho `r̄` khoảng 40–60%, còn λ = 4 cho
+`r̄` khoảng 5–10%.
+
+### 0.2 Luồng dữ liệu
+
+```mermaid
+flowchart LR
+  A["ViT: v, f₁..f₃"] --> U["Đặc trưng token u_i (467)"]
+  U --> NET["Thân mạng 3c<br/>self-attn + cross-attn câu hỏi"]
+  Qn["Câu hỏi q"] --> NET
+  NET --> LA["log α_i cho mỗi token"]
+  LA -->|"huấn luyện"| HC["Hard-concrete z_i ∈ [0,1]<br/>→ attention bias log(z+ε)"]
+  LA -->|"suy luận"| DET["ẑ_i ≥ 0,5 ⇒ giữ<br/>K = số token giữ (≥ K_min)"]
+  HC --> LLMt["LLM đóng băng (mặt nạ mềm)<br/>loss: KL + λ·E[K]/N + …"]
+  DET --> FOLD["Assign + Fold (cách 1)"] --> LLMi["LLM (xoá thật token)"]
+```
+
+### 0.3 Ví dụ số về rate penalty (ảnh GQA trung vị, N = 260)
+
+| Đại lượng | Giá trị ví dụ |
+| --- | --- |
+| Mạng mở `E[K] = Σ π_i` = 65 cổng | `E[K]/N = 0,25` |
+| Số hạng rate với λ = 1 | `λ · 0,25 = 0,25` |
+| Nếu đóng thêm 26 cổng (`E[K]` = 39, tức 15%) | rate giảm còn 0,15 (giảm 0,10). Mạng chỉ đóng thêm khi KL tăng **ít hơn 0,10** |
+| Cùng tình huống với λ = 4 | rate giảm 0,40, nên mạng chấp nhận KL tăng tới 0,40 để tiết kiệm thêm |
+
+λ chính là "giá" của mỗi 1% token tính theo đơn vị KL. λ càng lớn thì mạng
+càng sẵn sàng hy sinh chất lượng để tiết kiệm token.
+
 ## 1. Bài toán
 
 Một mạng `s_θ` gán cho mỗi visual token i một **cổng** `z_i ∈ [0, 1]`:
