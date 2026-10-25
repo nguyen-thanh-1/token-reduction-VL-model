@@ -29,15 +29,17 @@ nhất**. Phải lên lịch GPU với cả nhóm ngay từ đầu.
 
 ## Các bước thực hiện
 
+Cấu trúc code và nơi lưu kết quả của cả nhóm: [`../METHODS.md`](../METHODS.md) mục 8–9.
+
 | # | Việc | Sản phẩm | Xong khi |
 | --- | --- | --- | --- |
-| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | module PP1 của riêng bạn | **qua bài kiểm tra PP1 mục 13** |
-| 2 | **Spike** custom 4D float attention mask (làm sớm, quyết định tính khả thi) | ghi chú kết quả spike | qua 4 kiểm tra ở `method.md` mục 4.1 |
-| 3 | Cài mạng cổng + hard-concrete + 5 thành phần loss | `src/token_reduction_vl/pruning/gate_learn.py` | unit test trên tensor giả |
-| 4 | Tính trước teacher logit (top-64) cho 50k GQA train | file teacher | khoảng 2 giờ GPU |
-| 5 | Chạy thử 1 giá trị λ trên 5k mẫu | log `E[K]/N`, KL, histogram π | không rơi vào chế độ hỏng (`method.md` mục 7) |
-| 6 | Huấn luyện đủ 5 giá trị λ | 5 checkpoint | khoảng 10 giờ mỗi λ |
-| 7 | Đánh giá trên dev subset, rồi full benchmark | `outputs/reports/pp4-dsfold-gate-*` | đủ bảng ở `method.md` mục 8 |
+| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | `src/token_reduction_vl/pruning/pp4_gate/dsfold_base/` | **qua bài kiểm tra PP1 mục 13** |
+| 2 | **Spike** custom 4D float attention mask (làm sớm, quyết định tính khả thi) | `scripts/pp4/spike_attention_bias.py` → `outputs/pp4_gate/spike/` | qua 4 kiểm tra ở `method.md` mục 4.1 |
+| 3 | Cài mạng cổng + hard-concrete + 5 thành phần loss | `src/token_reduction_vl/pruning/pp4_gate/` (`hard_concrete.py`, `model.py`, `losses.py`, `attention_bias.py`) | unit test trên tensor giả |
+| 4 | Tính trước teacher logit (top-64) cho 50k GQA train | `scripts/pp4/make_teacher_logits.py` → `data/features/pp4_gate/teacher_gqa_train_50k.npz` | khoảng 2 giờ GPU |
+| 5 | Chạy thử 1 giá trị λ trên 5k mẫu | `outputs/pp4_gate/training/` (log `E[K]/N`, KL, histogram π) | không rơi vào chế độ hỏng (`method.md` mục 7) |
+| 6 | Huấn luyện đủ 5 giá trị λ | `outputs/pp4_gate/checkpoints/` (không lên Git) | khoảng 10 giờ mỗi λ |
+| 7 | Đánh giá trên dev subset, rồi full benchmark | `outputs/pp4_gate/runs/<run_id>/`, báo cáo ở `outputs/pp4_gate/reports/<report_id>/` | đủ bảng ở `method.md` mục 8 |
 
 **Điểm dừng sớm:** nếu bước 2 thất bại (không có cách nào đưa bias vào
 attention), hoặc bước 5 không ổn định sau 2–3 lần chỉnh, thì báo nhóm và

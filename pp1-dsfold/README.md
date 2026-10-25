@@ -17,15 +17,17 @@ rộng của họ. Vì vậy, mọi thay đổi trong `method.md` phải đượ
 
 ## Các bước thực hiện
 
+Cấu trúc code và nơi lưu kết quả của cả nhóm: [`../METHODS.md`](../METHODS.md) mục 8–9.
+
 | # | Việc | Sản phẩm | Xong khi |
 | --- | --- | --- | --- |
-| 1 | Cài `select()` theo interface (`00-common` mục 4.0): S1–S4 | `src/token_reduction_vl/pruning/dsfold.py` | unit test trên tensor giả chạy được trên CPU |
-| 2 | Ghi bộ tham số D | `configs/prune_dsfold.yaml` (phiên bản `D-1.0`) | file có đủ mọi tham số ở `method.md` mục 8.0 |
-| 3 | Tạo bộ kiểm tra "cài đúng PP1" (100 mẫu) và kết quả tham chiếu | `tests/fixtures/pp1_conformance/`, `tests/test_pp1_conformance.py` | được một thành viên khác review |
+| 1 | Cài `select()` theo interface (`00-common` mục 4.0): S1–S4 | `src/token_reduction_vl/pruning/pp1_dsfold/` (`scoring.py`, `dpp.py`, `fold.py`, `pruner.py`) | unit test trên tensor giả chạy được trên CPU |
+| 2 | Ghi bộ tham số D | `configs/dsfold_D-1.0.yaml` (chung cho cả nhóm) + `configs/methods/pp1_dsfold.yaml` | file có đủ mọi tham số ở `method.md` mục 8.0 |
+| 3 | Tạo bộ kiểm tra "cài đúng PP1" (100 mẫu) và kết quả tham chiếu | tensor: `data/features/pp1_conformance/`; tham chiếu: `tests/fixtures/pp1_conformance/reference.json`; test: `tests/test_pp1_conformance.py`; danh sách mẫu: `configs/splits/pp1_conformance_100.txt` | được một thành viên khác review |
 | 4 | Ghép với wrapper chung, kiểm chứng `r = 100%` | — | trùng baseline 100/100 mẫu mỗi benchmark |
-| 5 | Chỉnh tham số trên GQA val ở L3 | bộ `D-tuned` | khoảng 32 lần chạy (`method.md` mục 8.1) |
-| 6 | Chạy dev subset ở 7 mức, rồi full ở L6–L2 | `outputs/reports/pp1-dsfold-*` | đủ bảng ở `method.md` mục 9.1 |
-| 7 | Ablation A1–A6 | bảng ablation | `method.md` mục 9.2 |
+| 5 | Chỉnh tham số trên GQA val ở L3 | `configs/dsfold_D-tuned.yaml`; log ở `outputs/pp1_dsfold/tuning/` | khoảng 32 lần chạy (`method.md` mục 8.1) |
+| 6 | Chạy dev subset ở 7 mức, rồi full ở L6–L2 | `outputs/pp1_dsfold/runs/<run_id>/`, báo cáo ở `outputs/pp1_dsfold/reports/<report_id>/` | đủ bảng ở `method.md` mục 9.1 |
+| 7 | Ablation A1–A6 | `outputs/pp1_dsfold/ablations/<A1..A6>/` | `method.md` mục 9.2 |
 | 8 | Phân tích định tính (bản đồ token, position bias, MME theo category và kích thước) | hình + bảng | `method.md` mục 9.3 |
 
 ## Chi phí GPU ước tính

@@ -176,7 +176,7 @@ chấm điểm benchmark.
    Mở rộng `PruningOutput` để chứa DeepStack′ và toạ độ lưới của token giữ lại.
 4. **Đo đạc:** dùng CUDA event để đo thời gian ViT / pruner / prefill / decode,
    kèm bộ đếm FLOPs tính theo công thức.
-5. **Config và báo cáo:** mỗi phương pháp/ngân sách có `configs/prune_*.yaml`
+5. **Config và báo cáo:** mỗi phương pháp/ngân sách có `configs/methods/pp<N>_<tên>.yaml`
    và `report.id` riêng. **Không ghi đè** báo cáo baseline.
 
 ## 7. Giả thuyết và thí nghiệm

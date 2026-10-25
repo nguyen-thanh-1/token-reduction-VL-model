@@ -377,10 +377,10 @@ Không ghi đè báo cáo baseline.
 
 | Thành phần | Mục | Người phụ trách (khuyến nghị) | Kiểm tra trước khi dùng |
 | --- | --- | --- | --- |
-| Wrapper suy luận (lắp token, M-RoPE, decode) | 4 | **một người cài cho cả nhóm** trong tuần đầu | `r = 100%` trùng baseline 100/100 mẫu mỗi benchmark (mục 4.2, bước 7) |
-| Bộ đánh giá: chấm điểm, `agree`, bootstrap, đo thời gian | 8 | cùng người hoặc một người khác | chạy lại ra đúng số liệu baseline trong `outputs/reports/baseline/…` |
-| Danh sách dữ liệu chung: 50k GQA train, 5k GQA val, dev subset 1.000 câu | 7 | một người, làm một lần | lưu thành file trong `configs/` hoặc `data/splits/`, ghi seed |
-| Đối chứng: P0, Random-K, Grid-K, Pool, FastV, DivPrune, CDPruner | 9 | chia đều cho các thành viên | mỗi đối chứng chạy một lần, mọi người dùng chung kết quả |
+| Wrapper suy luận (lắp token, M-RoPE, decode): `src/token_reduction_vl/models/qwen3_vl_pruned.py` | 4 | **một người cài cho cả nhóm** trong tuần đầu | `r = 100%` trùng baseline 100/100 mẫu mỗi benchmark (mục 4.2, bước 7) |
+| Bộ đánh giá: `src/token_reduction_vl/evaluation/{agreement,bootstrap,timing,run_meta}.py` | 8 | cùng người hoặc một người khác | chạy lại ra đúng số liệu baseline trong `outputs/reports/baseline/…` |
+| Danh sách dữ liệu chung: 50k GQA train, 5k GQA val, dev subset 1.000 câu | 7 | một người, làm một lần | lưu trong `configs/splits/` (quy ước tên: `METHODS.md` mục 9.3), ghi seed |
+| Đối chứng: `src/token_reduction_vl/pruning/baselines/`, kết quả ở `outputs/controls/` | 9 | chia đều cho các thành viên | mỗi đối chứng chạy một lần, mọi người dùng chung kết quả |
 
 Nếu nhóm chọn để **mỗi người tự cài wrapper**, mọi bản cài đều phải qua cùng
 bài kiểm tra ở cột cuối trước khi được dùng để báo cáo.

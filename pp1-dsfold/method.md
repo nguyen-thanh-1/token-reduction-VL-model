@@ -288,11 +288,11 @@ bộ D cho phần PP1 bên trong phương pháp của mình và **không tự ch
 | `N_cap` | 4.096 | trên ngưỡng này dùng max–min thay cho DPP |
 | clip z-score | [−3, 3] | |
 | ngưỡng `d2` | 1e-6 | dừng DPP và bổ sung theo quality |
-| STOPWORDS | danh sách trong `configs/prune_dsfold.yaml` (mục 3.1) | phải giống hệt nhau giữa các thành viên |
+| STOPWORDS | danh sách trong `configs/dsfold_D-1.0.yaml` (mục 3.1) | phải giống hệt nhau giữa các thành viên |
 | dtype tính điểm | fp32 (`v`, `f`, `q` chuyển sang fp32 trước S1) | |
 | phá hoà khi argmax | chọn chỉ số **nhỏ nhất** | để mọi bản cài ra cùng `I_keep` |
 
-Bộ D được ghi vào `configs/prune_dsfold.yaml` (phiên bản `D-1.0`). Mọi kết quả
+Bộ D được ghi vào `configs/dsfold_D-1.0.yaml`. Đổi bộ D thì tạo file mới `dsfold_D-1.1.yaml`, không sửa file cũ. Mọi kết quả
 của cả 4 phương pháp phải ghi lại phiên bản bộ D đã dùng.
 
 ### 8.1 Chỉnh tham số (chỉ thành viên PP1 làm)
@@ -386,7 +386,17 @@ xuống (ví dụ 2.048) và ghi rõ trong báo cáo.
 cài **cho cùng kết quả**. Nếu không, so sánh giữa 4 phương pháp sẽ không còn
 công bằng.
 
-**Bộ kiểm tra chung** (một người tạo một lần, lưu trong `tests/fixtures/pp1_conformance/`):
+**Bộ kiểm tra chung** (một người tạo một lần bằng `scripts/common/make_conformance_fixtures.py`):
+- danh sách mẫu: `configs/splits/pp1_conformance_100.txt` (theo dõi bằng Git);
+- tensor đầu vào: `data/features/pp1_conformance/sample_<i>.npz`. Không lên Git
+  vì quá lớn; ảnh MME có N > 4.096 cho tensor hàng chục MB. Chia sẻ trong nhóm
+  qua ổ chung, hoặc mỗi người tự tạo lại bằng script trên;
+- kết quả tham chiếu: `tests/fixtures/pp1_conformance/reference.json`
+  (`keep_indices` và checksum của `deepstack_kept`, nhỏ, theo dõi bằng Git);
+- test: `tests/test_pp1_conformance.py`, chạy cho cả 4 bản PP1. Test **tự bỏ
+  qua** (skip) nếu chưa có tensor trong `data/`.
+
+Nội dung bộ kiểm tra:
 - 100 mẫu cố định: 40 GQA testdev, 30 MMBench val, 30 MME test (seed 42). Trong
   30 mẫu MME có ít nhất 3 mẫu N > 4.096, để kiểm tra nhánh max–min;
 - với mỗi mẫu, lưu `v`, `f₁..f₃` (fp16), `grid_hw`, `question_ids`;

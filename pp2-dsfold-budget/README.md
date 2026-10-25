@@ -23,15 +23,17 @@ sách. Sau đó DSFold (PP1, bộ tham số D) chọn và fold đúng số token
 
 ## Các bước thực hiện
 
+Cấu trúc code và nơi lưu kết quả của cả nhóm: [`../METHODS.md`](../METHODS.md) mục 8–9.
+
 | # | Việc | Sản phẩm | Xong khi |
 | --- | --- | --- | --- |
-| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | module PP1 của riêng bạn | **qua bài kiểm tra PP1 mục 13** |
-| 2 | Cài phần trích đặc trưng x (403 chiều), có trả về `sel`, `d2` của greedy DPP | `src/token_reduction_vl/pruning/budget_head.py` | unit test trên tensor giả |
-| 3 | Script tạo nhãn: 50k GQA train + 5k GQA val, 7 mức, dùng lại kết quả ViT | `scripts/make_budget_labels.py`, file `.npz` | khoảng 9 giờ GPU; báo cáo tỉ lệ nhãn không đơn điệu |
-| 4 | Huấn luyện budget head (CPU), 3 seed | checkpoint + log | AUROC ≥ 0,75 cho `p_1..p_3` trên GQA val |
-| 5 | Chọn θ₁, θ₂, θ₃ trên GQA val cho `r̄` ≈ 33,3 / 22,2 / 11,1% | `configs/prune_dsfold_budget.yaml` | khoá θ |
+| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | `src/token_reduction_vl/pruning/pp2_budget/dsfold_base/` | **qua bài kiểm tra PP1 mục 13** |
+| 2 | Cài phần trích đặc trưng x (403 chiều), có trả về `sel`, `d2` của greedy DPP | `src/token_reduction_vl/pruning/pp2_budget/features.py`, `model.py` | unit test trên tensor giả |
+| 3 | Script tạo nhãn: 50k GQA train + 5k GQA val, 7 mức, dùng lại kết quả ViT | `scripts/pp2/make_budget_labels.py` → `data/features/pp2_budget/labels_gqa_train_50k.npz`, `labels_gqa_val_5k.npz` | khoảng 9 giờ GPU; báo cáo tỉ lệ nhãn không đơn điệu |
+| 4 | Huấn luyện budget head (CPU), 3 seed | `outputs/pp2_budget/checkpoints/` (không lên Git) + `outputs/pp2_budget/training/` | AUROC ≥ 0,75 cho `p_1..p_3` trên GQA val |
+| 5 | Chọn θ₁, θ₂, θ₃ trên GQA val cho `r̄` ≈ 33,3 / 22,2 / 11,1% | `configs/methods/pp2_budget.yaml` (θ₁..θ₃, phiên bản D, checkpoint) | khoá θ |
 | 6 | Cài các so sánh: ngưỡng DPP, ngưỡng entropy, oracle | — | `method.md` mục 10 |
-| 7 | Đánh giá trên dev subset, rồi full benchmark | `outputs/reports/pp2-dsfold-budget-*` | trả lời Q1–Q5 (`method.md` mục 11) |
+| 7 | Đánh giá trên dev subset, rồi full benchmark | `outputs/pp2_budget/runs/<run_id>/`, báo cáo ở `outputs/pp2_budget/reports/<report_id>/` | trả lời Q1–Q5 (`method.md` mục 11) |
 
 ## Chi phí GPU ước tính
 

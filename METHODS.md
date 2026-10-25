@@ -69,7 +69,7 @@ Tuần 1   Mọi thành viên: đọc 00-common + PP1 method.md; tự cài PP1 (
          Song song, chia việc chung (00-common mục 10):
            · 1 người: wrapper suy luận + kiểm chứng r = 100%
            · 1 người: bộ đánh giá (agree, bootstrap, đo thời gian) + danh sách dữ liệu chung
-           · thành viên PP1: bộ D (configs/prune_dsfold.yaml) + bộ kiểm tra "cài đúng PP1"
+           · thành viên PP1: bộ D (configs/dsfold_D-1.0.yaml) + bộ kiểm tra "cài đúng PP1"
            · thành viên PP4: bắt đầu spike 4D mask
 
 Tuần 2   Mọi thành viên qua bài kiểm tra "cài đúng PP1" (PP1 mục 13)
@@ -131,8 +131,211 @@ Không chạy hai job GPU cùng lúc, vì sẽ sai số liệu thời gian và V
 | Quy tắc | Nội dung |
 | --- | --- |
 | Sửa tài liệu chung | `00-common/README.md` và `pp1-dsfold/method.md` chỉ được sửa khi **cả nhóm đồng ý**. Đổi bộ D thì phải tăng phiên bản (`D-1.0` → `D-1.1`) và mọi người chạy lại bài kiểm tra PP1 |
-| Code | mỗi phương pháp một module trong `src/token_reduction_vl/pruning/`; không import module của phương pháp khác |
+| Code | mỗi phương pháp **một folder riêng** trong `src/token_reduction_vl/pruning/` (mục 8). Chỉ sửa folder của mình; **không import** code của phương pháp khác |
 | Nhánh git | `feat/pp<N>-<tên>` tách từ `dev`; phần chung trên `feat/common-<tên>` |
-| Config và báo cáo | mỗi phương pháp có `configs/prune_<tên>.yaml` và `report.id` riêng; ghi phiên bản bộ D, git SHA, phiên bản dữ liệu chung |
-| Dữ liệu huấn luyện | dùng chung **một** danh sách 50k GQA train / 5k GQA val (`00-common` mục 7) |
-| Báo cáo baseline | không ai được ghi đè `outputs/reports/baseline/` |
+| Config | mỗi phương pháp có `configs/methods/pp<N>_<tên>.yaml` riêng (mục 8.3) |
+| Kết quả | mỗi phương pháp ghi vào folder riêng `outputs/pp<N>_<tên>/` (mục 9). Mỗi lần chạy có `run_meta.json`, ghi phiên bản bộ D, git SHA, phiên bản danh sách dữ liệu |
+| Dữ liệu huấn luyện | dùng chung **một** bộ danh sách trong `configs/splits/` (mục 9.3) |
+| Báo cáo baseline | không ai được ghi đè `outputs/baseline/` và `outputs/reports/baseline/` |
+
+## 8. Cấu trúc code
+
+### 8.1 Cây thư mục
+
+```
+src/token_reduction_vl/
+├── pruning/
+│   ├── base.py                    ← CHUNG: PrunerInput, PrunerOutput, VisualTokenPruner (00-common mục 4.0)
+│   ├── baselines/                 ← CHUNG: các đối chứng (00-common mục 9)
+│   │   ├── random_k.py   grid_k.py   pool.py
+│   │   ├── divprune.py   cdpruner.py fastv.py
+│   │   └── resolution_p0.py       (chỉ đổi max_pixels/min_pixels, không cắt token)
+│   │
+│   ├── pp1_dsfold/                ← thành viên PP1
+│   │   ├── scoring.py             S1: q, rel, ms, quality
+│   │   ├── dpp.py                 S2: greedy DPP + max–min (N > N_cap)
+│   │   ├── fold.py                S3 Assign + S4 Fold
+│   │   └── pruner.py              DSFoldPruner(VisualTokenPruner)
+│   │
+│   ├── pp2_budget/                ← thành viên PP2
+│   │   ├── dsfold_base/           bản PP1 do PP2 tự cài (scoring.py, dpp.py, fold.py)
+│   │   ├── features.py            403 đặc trưng
+│   │   ├── model.py               budget head (cumulative link)
+│   │   ├── train.py
+│   │   └── pruner.py              BudgetDSFoldPruner
+│   │
+│   ├── pp3_scorer/                ← thành viên PP3
+│   │   ├── dsfold_base/           bản PP1 do PP3 tự cài
+│   │   ├── features.py            u_i (467 chiều)
+│   │   ├── saliency.py            nhãn gradient × input
+│   │   ├── models.py              3a MLP, 3b CNN, 3c transformer
+│   │   ├── train.py               ListNet (tuyến B), chưng cất (tuyến A)
+│   │   └── pruner.py              ScoredDSFoldPruner
+│   │
+│   └── pp4_gate/                  ← thành viên PP4
+│       ├── dsfold_base/           bản PP1 do PP4 tự cài
+│       ├── features.py
+│       ├── hard_concrete.py
+│       ├── model.py               mạng cổng
+│       ├── losses.py              KL + rate + chống trùng lặp + neo DPP
+│       ├── attention_bias.py      custom 4D mask (spike)
+│       ├── train.py
+│       └── pruner.py              GatedDSFoldPruner
+│
+├── models/
+│   ├── qwen3_vl.py                (baseline có sẵn, không sửa)
+│   └── qwen3_vl_pruned.py         ← CHUNG: wrapper (00-common mục 4.2)
+│
+└── evaluation/
+    ├── metrics.py  runner.py      (có sẵn)
+    ├── agreement.py               ← CHUNG: chỉ số agree (00-common mục 8.2)
+    ├── bootstrap.py               ← CHUNG: paired cluster bootstrap (mục 8.4)
+    ├── timing.py                  ← CHUNG: đo ViT / bộ chọn / prefill / decode
+    └── run_meta.py                ← CHUNG: ghi run_meta.json (mục 9.2)
+
+scripts/
+├── common/   run_pruned.py  run_controls.py  make_splits.py  make_conformance_fixtures.py
+├── pp1/      tune_dsfold.py
+├── pp2/      make_budget_labels.py  train_budget_head.py  pick_thresholds.py
+├── pp3/      make_saliency_labels.py  train_score_head.py
+└── pp4/      spike_attention_bias.py  make_teacher_logits.py  train_gates.py
+
+tests/
+├── common/   test_wrapper_noop.py  test_bootstrap.py  test_interface.py
+├── test_pp1_conformance.py        ← CHUNG: chạy cho cả 4 bản PP1 (pp1_dsfold + 3 dsfold_base)
+├── pp1/  pp2/  pp3/  pp4/         ← unit test riêng (tensor giả, không cần model)
+└── fixtures/pp1_conformance/reference.json   (kết quả tham chiếu, nhỏ, theo dõi bằng git)
+```
+
+### 8.2 Quyền sửa
+
+| Vùng | Ai được sửa |
+| --- | --- |
+| `pruning/base.py`, `pruning/baselines/`, `models/qwen3_vl_pruned.py`, `evaluation/{agreement,bootstrap,timing,run_meta}.py`, `scripts/common/`, `tests/common/`, `tests/test_pp1_conformance.py` | **cả nhóm đồng ý** (đây là code của "luật chơi" `00-common`) |
+| `pruning/pp<N>_*/`, `scripts/pp<N>/`, `tests/pp<N>/`, `configs/methods/pp<N>_*.yaml` | **chỉ thành viên PP<N>** |
+
+Có **4 bản PP1** (`pp1_dsfold/` và 3 folder `dsfold_base/`). Việc lặp code là
+**cố ý**, để mỗi người làm độc lập. `tests/test_pp1_conformance.py` chạy trên
+cả 4 bản, đảm bảo chúng cho cùng kết quả.
+
+### 8.3 Config
+
+```
+configs/
+├── baseline_qwen3_vl.yaml  data_v1.yaml  report_baseline.yaml   (có sẵn, không sửa)
+├── dsfold_D-1.0.yaml           ← CHUNG: bộ tham số D của PP1 (PP1 mục 8.0); đổi thì tạo file D-1.1 mới
+├── controls.yaml               ← CHUNG: cấu hình các đối chứng
+├── splits/                     ← CHUNG: danh sách mẫu (mục 9.3)
+└── methods/
+    ├── pp1_dsfold.yaml         trỏ tới dsfold_D-1.0.yaml (hoặc D-tuned)
+    ├── pp2_budget.yaml         θ₁..θ₃, đường dẫn checkpoint, phiên bản D
+    ├── pp3_scorer.yaml         kiến trúc, đường dẫn checkpoint, phiên bản D
+    └── pp4_gate.yaml           λ, lịch huấn luyện, phiên bản D
+```
+
+## 9. Cấu trúc lưu kết quả
+
+### 9.1 Phân biệt `outputs/` và `data/`
+
+`.gitignore` hiện tại **theo dõi `outputs/`** (trừ checkpoint, `*.pt`,
+`*.safetensors`, `smoke_*`) và **bỏ qua `data/`**. Vì vậy:
+
+| Loại | Để ở | Git | Ví dụ |
+| --- | --- | --- | --- |
+| Prediction, metric, thời gian, báo cáo, hình | `outputs/` | **có**: cả nhóm xem được | `outputs/pp2_budget/runs/…/gqa_testdev.jsonl` |
+| Checkpoint mạng nhỏ | `outputs/pp<N>_*/checkpoints/` | **không** (đã bị ignore) | `budget_head_seed0.pt` |
+| Nhãn, đặc trưng, teacher logits, tensor lớn | `data/features/pp<N>_*/` | **không** | `labels_gqa_train_50k.npz` |
+| Tensor kiểm tra PP1 | `data/features/pp1_conformance/` | **không** (quá lớn) | `sample_000.npz` |
+| Danh sách mẫu (chỉ là ID) | `configs/splits/` | **có** | `gqa_train_50k.txt` |
+
+Lưu ý: file lớn hơn khoảng 10 MB **không** được để trong `outputs/`. Nếu cần chia
+sẻ file lớn trong nhóm thì dùng ổ chung, không đưa lên Git.
+
+### 9.2 Cây thư mục kết quả
+
+```
+outputs/
+├── baseline/                       (có sẵn, KHÔNG ghi đè)
+├── reports/baseline/               (có sẵn, KHÔNG ghi đè)
+│
+├── controls/                       ← CHUNG: chạy một lần, mọi người dùng
+│   └── <control>/<level>/<split>/  ví dụ: divprune/L3/dev_1k/  ·  random_k_s0/L1/full/  ·  p0/L3/full/
+│       ├── gqa_testdev.jsonl  mmb_validation.jsonl  mme_test.jsonl
+│       ├── metrics.json  timing.json  run_meta.json
+│
+├── pp1_dsfold/
+│   ├── tuning/                     log 32 lần chạy chỉnh tham số → bộ D-tuned
+│   ├── runs/<run_id>/              (cấu trúc file giống controls)
+│   ├── ablations/<A1..A6>/<run_id>/
+│   └── reports/<report_id>/        report.md, figures/, tables/, summary.json, manifest.json
+│
+├── pp2_budget/
+│   ├── runs/<run_id>/  reports/<report_id>/
+│   ├── training/                   log huấn luyện, AUROC, chọn θ (json, png)
+│   └── checkpoints/                (không lên Git)
+│
+├── pp3_scorer/
+│   ├── runs/<run_id>/  reports/<report_id>/
+│   ├── training/
+│   └── checkpoints/                (không lên Git)
+│
+├── pp4_gate/
+│   ├── runs/<run_id>/  reports/<report_id>/
+│   ├── spike/                      kết quả spike 4D mask
+│   ├── training/                   log theo λ: E[K]/N, KL, histogram π
+│   └── checkpoints/                (không lên Git)
+│
+└── comparison/                     ← CHUNG: so sánh cuối cùng 4 phương pháp
+    └── <report_id>/                Pareto plots, bảng chọn phương pháp, input cho ADR 0002
+
+data/features/                      (KHÔNG lên Git)
+├── pp1_conformance/                tensor v, f của 100 mẫu kiểm tra
+├── pp2_budget/                     labels_gqa_train_50k.npz, labels_gqa_val_5k.npz
+├── pp3_scorer/                     saliency_gqa_train_50k.npz
+└── pp4_gate/                       teacher_gqa_train_50k.npz
+```
+
+### 9.3 Quy ước đặt tên
+
+| Đối tượng | Quy ước | Ví dụ |
+| --- | --- | --- |
+| `<level>` | `L1` … `L7` cho mức cố định; `adaptive` cho PP2/PP4 | `L3`, `adaptive` |
+| `<split>` | `dev_1k` hoặc `full` | |
+| `<run_id>` | `<YYYYMMDD>_<method>_<variant>_<level>_<split>` | `20261102_pp1_D-1.0_L3_dev_1k` · `20261110_pp2_theta2_adaptive_full` · `20261115_pp4_lambda1_adaptive_full` |
+| `<report_id>` | `<method>-<variant>` | `pp1-dsfold-D-tuned`, `pp3-scorer-3b-routeB` |
+| File danh sách mẫu | `configs/splits/<tên>.txt`, mỗi dòng một `sample_id`, dòng đầu là comment ghi seed | `gqa_train_50k.txt`, `gqa_val_5k.txt`, `gqa_val_tune_2k.txt`, `dev_1k_gqa.txt`, `dev_1k_mmb.txt`, `dev_1k_mme.txt`, `pp1_conformance_100.txt` |
+
+### 9.4 Nội dung bắt buộc
+
+**Mỗi dòng prediction JSONL** giữ mọi trường của baseline, và thêm các trường sau:
+
+```json
+{
+  "sample_id": "...", "prediction": "...", "references": [...],
+  "method": "pp2_budget", "variant": "theta2", "level": "adaptive",
+  "ratio_target": null, "N": 260, "K": 58, "keep_ratio": 0.2231,
+  "input_tokens": 84, "output_tokens": 2,
+  "latency_seconds": 0.11, "timing": {"vit": 0.05, "selector": 0.002, "prefill": 0.03, "decode": 0.028},
+  "peak_vram_mb": 3900.0, "pruning_method": "pp2_budget"
+}
+```
+
+**`run_meta.json`** cho mỗi lần chạy:
+
+```json
+{
+  "run_id": "20261110_pp2_theta2_adaptive_full",
+  "method": "pp2_budget", "variant": "theta2",
+  "config": "configs/methods/pp2_budget.yaml", "dsfold_params": "D-1.0",
+  "git_sha": "...", "model_revision": "89644892e4d85e24eaac8bacfd4f463576704203",
+  "transformers": "5.x.y", "torch": "2.14.1",
+  "gpu": "...", "driver": "...", "seed": 0,
+  "splits": {"gqa": "full", "mmb": "full", "mme": "full"},
+  "checkpoint": "outputs/pp2_budget/checkpoints/budget_head_seed0.pt",
+  "started_at": "...", "finished_at": "..."
+}
+```
+
+**`metrics.json`**: kết quả của `scripts/evaluate_predictions.py` cho từng
+benchmark, cộng `agree`, `keep_ratio` trung bình, `r̄`, và với MME thì chia theo
+3 nhóm kích thước ảnh (`00-common` mục 5.1).

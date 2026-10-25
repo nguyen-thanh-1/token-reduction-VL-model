@@ -25,14 +25,16 @@ của model full-token bao nhiêu. Vẫn giữ DPP, Assign, Fold của PP1, và 
 
 ## Các bước thực hiện
 
+Cấu trúc code và nơi lưu kết quả của cả nhóm: [`../METHODS.md`](../METHODS.md) mục 8–9.
+
 | # | Việc | Sản phẩm | Xong khi |
 | --- | --- | --- | --- |
-| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | module PP1 của riêng bạn | **qua bài kiểm tra PP1 mục 13** |
-| 2 | Script tạo nhãn saliency (tuyến B): 50k GQA train, full token, 1 forward + 1 backward | `scripts/make_saliency_labels.py`, file `.npz` | khoảng 6 giờ GPU |
-| 3 | Cài 3 kiến trúc 3a, 3b, 3c và loss ListNet | `src/token_reduction_vl/pruning/score_head.py` | unit test trên tensor giả |
-| 4 | Huấn luyện 3a, rồi 3b và 3c (không cần VLM) | checkpoint + log | recall@K ≥ `quality` thủ công trên GQA val |
-| 5 | Ghép score head vào PP1 (thay S1), chạy dev subset 7 mức | `configs/prune_dsfold_scorer.yaml` | so sánh được với PP1 bộ D ở cùng r |
-| 6 | Đánh giá full benchmark | `outputs/reports/pp3-dsfold-scorer-*` | đủ bảng ở `method.md` mục 6 |
+| 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | `src/token_reduction_vl/pruning/pp3_scorer/dsfold_base/` | **qua bài kiểm tra PP1 mục 13** |
+| 2 | Script tạo nhãn saliency (tuyến B): 50k GQA train, full token, 1 forward + 1 backward | `scripts/pp3/make_saliency_labels.py` → `data/features/pp3_scorer/saliency_gqa_train_50k.npz` | khoảng 6 giờ GPU |
+| 3 | Cài 3 kiến trúc 3a, 3b, 3c và loss ListNet | `src/token_reduction_vl/pruning/pp3_scorer/models.py`, `train.py` | unit test trên tensor giả |
+| 4 | Huấn luyện 3a, rồi 3b và 3c (không cần VLM) | `outputs/pp3_scorer/checkpoints/` (không lên Git) + `outputs/pp3_scorer/training/` | recall@K ≥ `quality` thủ công trên GQA val |
+| 5 | Ghép score head vào PP1 (thay S1), chạy dev subset 7 mức | `configs/methods/pp3_scorer.yaml` | so sánh được với PP1 bộ D ở cùng r |
+| 6 | Đánh giá full benchmark | `outputs/pp3_scorer/runs/<run_id>/`, báo cáo ở `outputs/pp3_scorer/reports/<report_id>/` | đủ bảng ở `method.md` mục 6 |
 | 7 | (Tuỳ chọn) Tuyến A: spike 4D mask, chưng cất end-to-end | — | `method.md` mục 5 |
 
 ## Chi phí GPU ước tính

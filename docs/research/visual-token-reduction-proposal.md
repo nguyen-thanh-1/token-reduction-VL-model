@@ -261,7 +261,7 @@ which tokens get kept (compare with FEATHER).
    `NoOpPruner` is used. This is the first test to write.
 3. Instrumentation – CUDA-event timing of the ViT, pruner, prefill, and decode
    stages; analytical FLOPs counter.
-4. Configs – `configs/prune_<method>.yaml`. Each method/budget gets its own
+4. Configs – `configs/methods/pp<N>_<name>.yaml`. Each method/budget gets its own
    `report.id` and output directory. The baseline report is never overwritten.
 5. Tests – NoOp equivalence (CPU, tiny random-init config if feasible),
    index/position bookkeeping, and fold weight normalization. No model weights
