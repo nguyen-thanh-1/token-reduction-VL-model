@@ -1,0 +1,41 @@
+# PP3 — DSFold + learned score head (pp3-dsfold-scorer/).
+method: pp3_scorer
+factory: token_reduction_vl.pruning.pp3_scorer.factory:build_pruner
+dsfold_params: configs/dsfold_D-1.0.yaml
+
+model:
+  id: Qwen/Qwen3-VL-2B-Instruct
+  dtype: auto
+  device_map: auto
+  attn_implementation: null
+  max_new_tokens: 32
+
+# Fixed PCA used before storing features and again at inference.
+compressor: data/features/pp3_scorer/compressor.npz
+compressor_fit:
+  num_samples: 1000          # first ids of the training split
+  v_dim: 256
+  level_dim: 64
+  q_dim: 256
+
+labels:
+  split: configs/splits/gqa_train_50k.txt
+  canonical: data/processed/v1/gqa/train.jsonl
+  output_dir: data/features/pp3_scorer
+  prefix: saliency_gqa_train_50k
+  shard_size: 1000
+
+route_b:
+  arch: 3a                   # 3a MLP | 3b CNN | 3c transformer
+  epochs: 10
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 16
+  temperature: 0.5
+  holdout_fraction: 0.1
+  patience: 3
+  seeds: [0, 1, 2]
+  output_dir: outputs/pp3_scorer/checkpoints
+
+# Set after training; used by scripts/common/run_pruned.py.
+checkpoint: outputs/pp3_scorer/checkpoints/score_head_3a_seed0.pt

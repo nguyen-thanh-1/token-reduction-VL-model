@@ -89,6 +89,18 @@ này. Việc học sẽ dễ hơn và ít overfit hơn.
 | Vị trí | Fourier features của `(row_i/H′, col_i/W′)`: `sin(2^k·π·x)`, `cos(2^k·π·x)` với k = 0..3 | 16 |
 | Mức ngân sách | `log r` (một mạng dùng chung cho mọi r) | 1 |
 
+**Nén PCA cố định trước khi lưu (bắt buộc cho tuyến B).** Nếu lưu nguyên `v`
+và `f_l` (2048 chiều) cho 50k mẫu thì cần khoảng **220 GB**. Vì vậy, trước khi
+tạo nhãn, ta fit một lần một **PCA cố định, không huấn luyện** trên 1.000 mẫu
+đầu của tập train (`scripts/pp3/fit_compressor.py`):
+- `v` → 256 chiều, mỗi tầng `f̂_l` → 64 chiều, token câu hỏi → 256 chiều;
+- lưu ở `data/features/pp3_scorer/compressor.npz`;
+- **dùng lại đúng PCA đó lúc suy luận** (`configs/methods/pp3_scorer.yaml`, khoá `compressor`).
+
+Sau khi nén, mỗi mẫu GQA chiếm khoảng 240 KB, tức 50k mẫu ≈ 12 GB trên đĩa và
+trong RAM khi huấn luyện (dùng `--max-samples` nếu thiếu RAM). Các `P_v`, `P_l`,
+`P_q` trong bảng trên khi đó nhận đầu vào 256 / 64 / 256 chiều thay vì 2048.
+
 `u_i` có tổng 467 chiều. Câu hỏi được biểu diễn bằng:
 - `x_q = P_q(mean_j q̃_j)`, `P_q: Linear(2048 → 256)`, dùng cho 3a và 3b;
 - hoặc từng token `P_q(q_j)`, dùng cho 3c.
@@ -102,7 +114,7 @@ in_i = [ u_i ; x_q ; P_v(v_i) ⊙ x_q ]                  # 467 + 256 + 256 = 979
 s_i  = Linear(256 → 1)( GELU(Linear(512 → 256)( GELU(Linear(979 → 512)(in_i)) )) )
 ```
 
-- Tham số: projections khoảng 1,44M, MLP khoảng 0,63M, tổng **khoảng 2,1M**.
+- Tham số: **khoảng 0,78M** khi đầu vào đã nén PCA (khoảng 2,1M nếu dùng thẳng 2048 chiều).
 - Chi phí: `O(N)`.
 
 ### 3b — CNN nhỏ trên lưới token (bối cảnh cục bộ)
@@ -116,7 +128,7 @@ s = Conv1×1(256 → 1)(h³), duỗi lại thành [N]
 ```
 
 - Vùng nhìn (receptive field): 7 × 7 token, tức 224 × 224 pixel.
-- Tham số: 3 conv × 590.080 cộng các projections và FiLM, tổng **khoảng 3,5M**.
+- Tham số: 3 conv × 590.080 cộng các projections và FiLM, **khoảng 2,2M** khi đã nén PCA (khoảng 3,5M nếu không nén).
 - Chi phí: `O(N)`.
 - **Vì sao CNN hợp ở đây:** visual token của Qwen3-VL xếp được thành lưới 2D,
   nên conv 3×3 thấy được token có nằm trên cạnh, góc, hay ranh giới vật thể
@@ -132,7 +144,7 @@ h   = h + FFN(256 → 1024 → 256)(LN(h))
 s   = Linear(256 → 1)(LN(h))
 ```
 
-- Tham số: **khoảng 2,6M**.
+- Tham số: **khoảng 1,3M** khi đã nén PCA (khoảng 2,6M nếu không nén).
 - Chi phí: `O(N²·256)`. Với N = 1.750 khoảng 0,8 GMAC, vẫn nhỏ so với LLM prefill.
 
 ## 4. Tuyến huấn luyện B (làm trước): học theo saliency
@@ -179,7 +191,7 @@ Loss chỉ quan tâm **thứ hạng tương đối** giữa các token trong cù
 | Tối ưu | AdamW, lr 3e-4, weight decay 1e-2 |
 | Batch | 16 ảnh (đệm theo N) |
 | Epoch | 10, early stopping trên 10% tách theo `image_id` |
-| Thời gian | dưới 1 giờ (không cần VLM, chỉ dùng đặc trưng đã lưu) |
+| Thời gian | dưới 1 giờ (không cần VLM, chỉ dùng đặc trưng đã nén PCA và lưu sẵn) |
 
 ### 4.3 Hạn chế của tuyến B
 

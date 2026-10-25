@@ -1,0 +1,48 @@
+# DSFold parameter set D, version 1.0 (pp1-dsfold/method.md §8.0).
+# Shared by all four members. Never edit in place: create dsfold_D-1.1.yaml and
+# re-run tests/test_pp1_conformance.py when a value must change.
+version: D-1.0
+alpha: 1.0
+beta: 0.5
+ms_variant: A
+lam: 0.5
+gamma: 0.5
+tau: 0.1
+n_cap: 4096
+z_clip: 3.0
+d2_eps: 1.0e-6
+stopwords:
+  - the
+  - a
+  - an
+  - is
+  - are
+  - was
+  - were
+  - be
+  - of
+  - in
+  - "on"
+  - at
+  - to
+  - for
+  - with
+  - and
+  - or
+  - what
+  - which
+  - this
+  - that
+  - these
+  - those
+  - it
+  - its
+  - there
+  - do
+  - does
+  - "?"
+  - "."
+  - ","
+  - ":"
+  - ";"
+  - "!"
