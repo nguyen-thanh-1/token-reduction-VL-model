@@ -50,12 +50,12 @@ def relevance(v_unit: Tensor, q: Tensor | None) -> Tensor:
 
 
 def standardize_levels(levels: list[Tensor]) -> list[Tensor]:
-    """``f̂_l = (f_l − mean_tokens(f_l)) / std(f_l − mean)`` with one scalar std per level."""
+    """``f̂_l = (f_l − mean_tokens(f_l)) / std(f_l − mean)``; one population std per level."""
 
     out = []
     for level in levels:
         centered = level.float() - level.float().mean(dim=0, keepdim=True)
-        out.append(centered / (centered.std() + 1e-6))
+        out.append(centered / (centered.std(unbiased=False) + 1e-6))
     return out
 
 

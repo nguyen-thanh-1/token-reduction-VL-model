@@ -23,7 +23,7 @@ labels:
   canonical: data/processed/v1/gqa/train.jsonl
   output_dir: data/features/pp3_scorer
   prefix: saliency_gqa_train_50k
-  shard_size: 1000
+  shard_size: 500           # samples per shard; an interruption loses at most one shard's worth
 
 route_b:
   arch: 3a                   # 3a MLP | 3b CNN | 3c transformer

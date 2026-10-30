@@ -55,8 +55,9 @@ class ShardWriter:
         self.prefix = prefix
         self.shard_size = shard_size
         self.buffer: list[SaliencyRecord] = []
-        self.shard_index = 0
         directory.mkdir(parents=True, exist_ok=True)
+        # Continue numbering after shards left by an interrupted run, never overwrite them.
+        self.shard_index = len(list(directory.glob(f"{prefix}_[0-9][0-9][0-9][0-9].npz")))
 
     def add(self, record: SaliencyRecord) -> None:
         self.buffer.append(record)
@@ -84,6 +85,16 @@ class ShardWriter:
         )
         self.shard_index += 1
         self.buffer = []
+
+
+def stored_sample_ids(directory: Path, prefix: str) -> set[str]:
+    """Ids already saved in any shard of ``prefix`` (reads only the small ``meta`` array)."""
+
+    done: set[str] = set()
+    for path in directory.glob(f"{prefix}_*.npz"):
+        with np.load(path) as data:
+            done.update(sample_id for sample_id, _ in json.loads(str(data["meta"])))
+    return done
 
 
 def iter_shard(path: Path) -> Iterator[SaliencyRecord]:

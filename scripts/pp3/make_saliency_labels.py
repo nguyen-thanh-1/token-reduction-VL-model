@@ -25,7 +25,7 @@ from tqdm import tqdm  # noqa: E402
 from token_reduction_vl.config import load_yaml  # noqa: E402
 from token_reduction_vl.data.splits import iter_split_samples, read_split  # noqa: E402
 from token_reduction_vl.models.qwen3_vl_pruned import PrunedQwen3VL, question_text_for_scoring  # noqa: E402
-from token_reduction_vl.pruning.pp3_scorer.data import SaliencyRecord, ShardWriter  # noqa: E402
+from token_reduction_vl.pruning.pp3_scorer.data import SaliencyRecord, ShardWriter, stored_sample_ids  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase, load_dsfold_params  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.features import FeatureCompressor, question_rows  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.saliency import full_token_answer, gradient_x_input_saliency  # noqa: E402
@@ -44,45 +44,70 @@ def main() -> None:
     runner = PrunedQwen3VL(model["id"], dtype=model.get("dtype"), device_map=model.get("device_map", "auto"))
     base = DSFoldBase(load_dsfold_params(PROJECT_ROOT / config["dsfold_params"]))
     compressor = FeatureCompressor.load(PROJECT_ROOT / config["compressor"])
+    output_dir = PROJECT_ROOT / labels["output_dir"]
     ids = read_split(PROJECT_ROOT / labels["split"])[args.start : args.end]
+    # Resume: skip ids already stored in any shard, and ids skipped before (empty answer / OOM).
+    skip_log = output_dir / f"{labels['prefix']}_skipped.txt"
+    done = stored_sample_ids(output_dir, labels["prefix"])
+    if skip_log.exists():
+        done |= {line.split("\t")[0] for line in skip_log.read_text(encoding="utf-8").splitlines() if line}
+    todo = [sample_id for sample_id in ids if sample_id not in done]
+    print(f"{len(ids) - len(todo):,} of {len(ids):,} samples in this range are already done")
     writer = ShardWriter(
-        PROJECT_ROOT / labels["output_dir"],
+        output_dir,
         f"{labels['prefix']}_from{args.start:06d}",
-        shard_size=labels.get("shard_size", 1000),
+        shard_size=labels.get("shard_size", 500),
     )
 
-    skipped = 0
-    samples = iter_split_samples(PROJECT_ROOT / labels["canonical"], ids, project_root=PROJECT_ROOT)
-    for sample in tqdm(samples, total=len(ids), desc="saliency"):
-        text = question_text_for_scoring(sample.question, sample.metadata.get("choices") or [])
-        encoded = runner.encode(sample.image, sample.question, text)
-        answer = full_token_answer(runner, encoded)
-        if answer.numel() == 0:
-            skipped += 1
-            continue
-        saliency = gradient_x_input_saliency(runner, encoded, answer)
-        x = runner.pruner_input(encoded, 1.0)
-        with torch.no_grad():
-            scores = base.scores(x)
-            v = compressor.v(scores.v_unit)
-            levels = [projection(level) for projection, level in zip(compressor.levels, scores.f_hat, strict=True)]
-            q_raw = question_rows(x, base.params.stopwords)
-            q = compressor.q(q_raw) if q_raw.numel() else torch.zeros((0, compressor.q.output_dim))
-        writer.add(
-            SaliencyRecord(
-                sample_id=sample.sample_id,
-                image_id=str(sample.metadata.get("image_id")),
-                grid_hw=encoded.grid_hw,
-                v=v.half().cpu().numpy(),
-                f=torch.stack(levels).half().cpu().numpy(),
-                z_rel=scores.z_rel.cpu().numpy(),
-                z_ms=scores.z_ms.cpu().numpy(),
-                q=q.half().cpu().numpy(),
-                saliency=saliency.cpu().numpy(),
-            )
+    def skip(sample_id: str, reason: str) -> None:
+        with skip_log.open("a", encoding="utf-8") as handle:
+            handle.write(f"{sample_id}\t{reason}\n")
+
+    samples = iter_split_samples(PROJECT_ROOT / labels["canonical"], todo, project_root=PROJECT_ROOT)
+    try:
+        for sample in tqdm(samples, total=len(todo), desc="saliency"):
+            text = question_text_for_scoring(sample.question, sample.metadata.get("choices") or [])
+            try:
+                encoded = runner.encode(sample.image, sample.question, text)
+                answer = full_token_answer(runner, encoded)
+                if answer.numel() == 0:
+                    skip(sample.sample_id, "empty_answer")
+                    continue
+                saliency = gradient_x_input_saliency(runner, encoded, answer)
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                skip(sample.sample_id, "cuda_oom")
+                continue
+            record_sample(writer, sample, encoded, saliency, runner, base, compressor)
+    finally:
+        # Ctrl+C or a crash still saves the samples buffered since the last shard.
+        writer.flush()
+    print(f"Done. Shards in {output_dir}; skipped ids in {skip_log.name}")
+
+
+def record_sample(writer, sample, encoded, saliency, runner, base, compressor) -> None:
+    """Compress the sample's features with the fixed PCA and buffer them with its saliency."""
+
+    x = runner.pruner_input(encoded, 1.0)
+    with torch.no_grad():
+        scores = base.scores(x)
+        v = compressor.v(scores.v_unit)
+        levels = [projection(level) for projection, level in zip(compressor.levels, scores.f_hat, strict=True)]
+        q_raw = question_rows(x, base.params.stopwords)
+        q = compressor.q(q_raw) if q_raw.numel() else torch.zeros((0, compressor.q.output_dim))
+    writer.add(
+        SaliencyRecord(
+            sample_id=sample.sample_id,
+            image_id=str(sample.metadata.get("image_id")),
+            grid_hw=encoded.grid_hw,
+            v=v.half().cpu().numpy(),
+            f=torch.stack(levels).half().cpu().numpy(),
+            z_rel=scores.z_rel.cpu().numpy(),
+            z_ms=scores.z_ms.cpu().numpy(),
+            q=q.half().cpu().numpy(),
+            saliency=saliency.cpu().numpy(),
         )
-    writer.flush()
-    print(f"Done; skipped {skipped} samples with an empty answer.")
+    )
 
 
 if __name__ == "__main__":

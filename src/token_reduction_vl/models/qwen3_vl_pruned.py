@@ -117,6 +117,8 @@ class PrunedGeneration:
     output_tokens: int
     num_visual: int
     num_kept: int
+    keep_indices: list[int]
+    grid_hw: tuple[int, int]
     latency_seconds: float
     timing: dict[str, float]
     peak_vram_mb: float | None
@@ -194,7 +196,7 @@ class PrunedQwen3VL:
 
         self._sync()
         started = perf_counter()
-        vision = self.model.model.get_image_features(inputs["pixel_values"], grid_thw)
+        vision = self.model.model.get_image_features(inputs["pixel_values"], grid_thw, return_dict=True)
         self._sync()
         vit_seconds = perf_counter() - started
 
@@ -330,6 +332,8 @@ class PrunedQwen3VL:
             output_tokens=len(output_ids),
             num_visual=encoded.num_visual,
             num_kept=int(selection.keep_indices.numel()),
+            keep_indices=selection.keep_indices.tolist(),
+            grid_hw=encoded.grid_hw,
             latency_seconds=perf_counter() - total_started,
             timing={
                 "vit": encoded.timing["vit"],

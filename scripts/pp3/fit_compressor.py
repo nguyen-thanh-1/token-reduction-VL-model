@@ -33,8 +33,12 @@ ROWS_PER_SAMPLE = 32
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "configs" / "methods" / "pp3_scorer.yaml")
+    parser.add_argument("--force", action="store_true", help="Refit even if the compressor exists (invalidates stored labels).")
     args = parser.parse_args()
     config = load_yaml(args.config)
+    output = PROJECT_ROOT / config["compressor"]
+    if output.exists() and not args.force:
+        raise SystemExit(f"{output} already exists; labels depend on it. Use --force only before creating labels.")
     fit = config["compressor_fit"]
     model = config["model"]
     runner = PrunedQwen3VL(model["id"], dtype=model.get("dtype"), device_map=model.get("device_map", "auto"))
@@ -63,7 +67,6 @@ def main() -> None:
         level_dim=fit["level_dim"],
         q_dim=fit["q_dim"],
     )
-    output = PROJECT_ROOT / config["compressor"]
     compressor.save(output)
     print(f"Saved compressor {compressor.dims} to {output}")
 

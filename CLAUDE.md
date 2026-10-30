@@ -20,7 +20,7 @@ Always go through `uv` with Python 3.12 (Windows, PowerShell).
 
 ```powershell
 uv sync                                   # env from uv.lock (CUDA 13.0 torch wheels)
-uv run pytest -q                          # 60 CPU-only tests (+1 skipped until conformance tensors exist), ~35 s
+uv run pytest -q                          # 69 CPU-only tests (+1 skipped until conformance tensors exist), ~35 s
 uv run python scripts/preprocess_datasets.py --dataset all --limit 10   # smoke
 uv run python scripts/run_baseline.py --dataset mme_test --limit 10     # GPU smoke
 uv run python scripts/evaluate_predictions.py outputs/baseline/mme_test.jsonl --output data/metrics/mme_test.json

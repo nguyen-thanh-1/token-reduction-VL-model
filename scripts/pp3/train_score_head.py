@@ -28,6 +28,7 @@ def main() -> None:
     parser.add_argument("--arch", choices=["3a", "3b", "3c"], default=None)
     parser.add_argument("--seed", type=int, action="append", default=None, help="Repeatable; defaults to config seeds.")
     parser.add_argument("--max-samples", type=int, default=None, help="Cap loaded samples to limit RAM.")
+    parser.add_argument("--resume", action="store_true", help="Continue from score_head_<arch>_seed<s>_last.pt.")
     args = parser.parse_args()
     config = load_yaml(args.config)
     route_b = dict(config["route_b"])
@@ -45,7 +46,12 @@ def main() -> None:
     print(f"Loaded {len(records):,} samples; feature dims {dims}")
     for seed in seeds:
         checkpoint = train_route_b(
-            records, dims, replace(base, seed=seed), output_dir, PROJECT_ROOT / "outputs" / "pp3_scorer" / "training"
+            records,
+            dims,
+            replace(base, seed=seed),
+            output_dir,
+            PROJECT_ROOT / "outputs" / "pp3_scorer" / "training",
+            resume=args.resume,
         )
         print(f"seed {seed}: best checkpoint {checkpoint}")
 

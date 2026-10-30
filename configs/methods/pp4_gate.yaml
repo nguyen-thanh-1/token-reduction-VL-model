@@ -14,7 +14,9 @@ model:
 teacher:
   split: configs/splits/gqa_train_50k.txt
   canonical: data/processed/v1/gqa/train.jsonl
-  output: data/features/pp4_gate/teacher_gqa_train_50k.npz
+  output_dir: data/features/pp4_gate
+  prefix: teacher_gqa_train_50k
+  shard_size: 500
   top_k: 64
 
 training:
@@ -28,6 +30,7 @@ training:
   anchor_level: L3
   seed: 0
   pilot_samples: 5000        # step 5 of the PP4 README
+  save_every: 500            # steps between resumable checkpoints
   output_dir: outputs/pp4_gate
 
 # Set after training; used by scripts/common/run_pruned.py.

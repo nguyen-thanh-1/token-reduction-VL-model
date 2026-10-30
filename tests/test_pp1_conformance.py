@@ -52,23 +52,31 @@ def test_all_dsfold_copies_agree_on_the_maxmin_branch() -> None:
     assert torch.equal(outputs[0].keep_indices, outputs[1].keep_indices)
 
 
-@pytest.mark.skipif(not FIXTURES.exists(), reason="shared conformance tensors not generated yet")
+REFERENCE = PROJECT_ROOT / "tests" / "fixtures" / "pp1_conformance" / "reference.json"
+
+
+def test_fixture_round_trip(tmp_path) -> None:
+    from token_reduction_vl.pruning.conformance import load_fixture, save_fixture
+
+    x = replace(synthetic_input(64, 7), ratio=None)
+    save_fixture(tmp_path / "s.npz", x, sample_id="gqa:testdev:1")
+    sample_id, loaded = load_fixture(tmp_path / "s.npz", BUDGET_LEVELS["L3"])
+    assert sample_id == "gqa:testdev:1"
+    assert loaded.grid_hw == x.grid_hw and loaded.question_tokens == x.question_tokens
+    assert torch.allclose(loaded.embed_tokens.weight, x.embed_tokens.weight[x.question_ids], atol=1e-6)
+
+
+@pytest.mark.skipif(not (FIXTURES.exists() and REFERENCE.exists()), reason="shared conformance fixtures not generated yet")
 def test_fixture_reference_matches() -> None:  # pragma: no cover - needs data/features
     import json
 
-    import numpy as np
+    from token_reduction_vl.pruning.conformance import load_fixture
 
-    reference = json.loads((PROJECT_ROOT / "tests" / "fixtures" / "pp1_conformance" / "reference.json").read_text())
-    for entry in reference:
-        data = np.load(FIXTURES / entry["file"])
-        x = PrunerInput(
-            v=torch.from_numpy(data["v"]).float(),
-            deepstack=[torch.from_numpy(data[f"f{i}"]).float() for i in range(3)],
-            grid_hw=tuple(int(v) for v in data["grid_hw"]),
-            question_ids=torch.from_numpy(data["question_ids"]).long(),
-            question_tokens=tuple(json.loads(str(data["question_tokens"]))),
-            embed_tokens=torch.nn.Embedding.from_pretrained(torch.from_numpy(data["question_embeddings"]).float()),
-            ratio=BUDGET_LEVELS[entry["level"]],
-        )
+    reference = json.loads(REFERENCE.read_text(encoding="utf-8"))
+    for entry in reference["entries"]:
+        _, x = load_fixture(FIXTURES / entry["file"], BUDGET_LEVELS[entry["level"]])
         for name, impl in IMPLEMENTATIONS.items():
-            assert impl().select(x).keep_indices.tolist() == entry["keep_indices"], (name, entry["file"])
+            out = impl().select(x)
+            assert out.keep_indices.tolist() == entry["keep_indices"], (name, entry["file"], entry["level"])
+            sums = [float(level.double().sum()) for level in out.deepstack_kept]
+            assert sums == pytest.approx(entry["deepstack_sum"], rel=1e-4, abs=1e-2), (name, entry["file"])
