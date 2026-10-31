@@ -307,11 +307,15 @@ class PrunedQwen3VL:
         scoring_text: str,
         pruner: VisualTokenPruner,
         ratio: float | None,
+        encoded: EncodedSample | None = None,
     ) -> PrunedGeneration:
+        """Encode, prune and decode. Passing ``encoded`` reuses one ViT pass for several
+        pruners; ``latency_seconds`` then excludes the ViT time."""
+
         if self.device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(self.device)
         total_started = perf_counter()
-        encoded = self.encode(image, prompt, scoring_text)
+        encoded = encoded or self.encode(image, prompt, scoring_text)
         x = self.pruner_input(encoded, ratio)
         self._sync()
         started = perf_counter()

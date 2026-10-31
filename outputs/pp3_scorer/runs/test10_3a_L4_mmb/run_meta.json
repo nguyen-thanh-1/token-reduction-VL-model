@@ -1,0 +1,23 @@
+{
+  "run_id": "test10_3a_L4_mmb",
+  "method": "pp3_scorer",
+  "variant": "default",
+  "level": "L4",
+  "source": "mmb_validation",
+  "split": "outputs\\pp3_scorer\\reports\\test10\\mmb.txt",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer.yaml",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": "outputs/pp3_scorer/checkpoints/score_head_3a_seed0.pt",
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-10-31T14:38:32+00:00",
+  "finished_at": "2026-10-31T14:38:35+00:00",
+  "rows": 10,
+  "errors": 0,
+  "git_sha": "8c3b13bd3c635b55819f20ee80cf648450bf8bed",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

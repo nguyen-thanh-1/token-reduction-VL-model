@@ -65,6 +65,45 @@ def finished_rows(path: Path) -> list[str]:
     return rows
 
 
+def prediction_record(sample, result, *, method: str, variant: str, level: str, ratio, save_keep: bool) -> dict:
+    """One JSONL row of a pruned run (the format read by the evaluators and reports)."""
+
+    task_type = sample.metadata.get("task_type")
+    references = list(sample.answers)
+    return {
+        "sample_id": sample.sample_id,
+        "dataset": sample.metadata.get("dataset"),
+        "split": sample.metadata.get("split"),
+        "task_type": task_type,
+        "image_id": sample.metadata.get("image_id"),
+        "question": sample.question,
+        "references": references,
+        "prediction": result.text,
+        "exact_match": (
+            any(normalize_answer(result.text) == normalize_answer(answer) for answer in references)
+            if references and task_type in (None, "open_vqa")
+            else None
+        ),
+        "method": method,
+        "variant": variant,
+        "level": level,
+        "ratio_target": ratio,
+        "N": result.num_visual,
+        "K": result.num_kept,
+        "keep_ratio": result.num_kept / result.num_visual,
+        "input_tokens": result.input_tokens,
+        "output_tokens": result.output_tokens,
+        "latency_seconds": result.latency_seconds,
+        "timing": result.timing,
+        "peak_vram_mb": result.peak_vram_mb,
+        "pruning_method": method,
+        "pruner_metadata": result.pruner_metadata,
+        "grid_hw": list(result.grid_hw),
+        "keep_indices": result.keep_indices if save_keep else None,
+        "metadata": sample.metadata,
+    }
+
+
 def load_pruner(method_config: str, device: str):
     if method_config == "none":
         return "none", NoOpPruner(), {}
@@ -125,40 +164,10 @@ def main() -> None:
                 with (run_dir / "errors.jsonl").open("a", encoding="utf-8") as log:
                     log.write(json.dumps({"sample_id": sample.sample_id, "error": str(exc)[:500]}) + "\n")
                 continue
-            task_type = sample.metadata.get("task_type")
-            references = list(sample.answers)
-            record = {
-                "sample_id": sample.sample_id,
-                "dataset": sample.metadata.get("dataset"),
-                "split": sample.metadata.get("split"),
-                "task_type": task_type,
-                "image_id": sample.metadata.get("image_id"),
-                "question": sample.question,
-                "references": references,
-                "prediction": result.text,
-                "exact_match": (
-                    any(normalize_answer(result.text) == normalize_answer(answer) for answer in references)
-                    if references and task_type in (None, "open_vqa")
-                    else None
-                ),
-                "method": method,
-                "variant": args.variant,
-                "level": args.level,
-                "ratio_target": ratio,
-                "N": result.num_visual,
-                "K": result.num_kept,
-                "keep_ratio": result.num_kept / result.num_visual,
-                "input_tokens": result.input_tokens,
-                "output_tokens": result.output_tokens,
-                "latency_seconds": result.latency_seconds,
-                "timing": result.timing,
-                "peak_vram_mb": result.peak_vram_mb,
-                "pruning_method": method,
-                "pruner_metadata": result.pruner_metadata,
-                "grid_hw": list(result.grid_hw),
-                "keep_indices": None if args.no_save_keep else result.keep_indices,
-                "metadata": sample.metadata,
-            }
+            record = prediction_record(
+                sample, result, method=method, variant=args.variant, level=args.level, ratio=ratio,
+                save_keep=not args.no_save_keep,
+            )
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
             count += 1

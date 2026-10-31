@@ -1,0 +1,11 @@
+# test10 seed=0, disjoint from dev_1k
+mmbench:validation:1001623
+mmbench:validation:3001515
+mmbench:validation:1001908
+mmbench:validation:1555
+mmbench:validation:1000018
+mmbench:validation:2000757
+mmbench:validation:2000463
+mmbench:validation:1001771
+mmbench:validation:3001753
+mmbench:validation:1000685

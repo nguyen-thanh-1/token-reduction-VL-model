@@ -1,0 +1,11 @@
+# test10 seed=0, disjoint from dev_1k
+gqa:testdev:20879187
+gqa:testdev:202100613
+gqa:testdev:20306354
+gqa:testdev:20412448
+gqa:testdev:202012386
+gqa:testdev:20210976
+gqa:testdev:201676561
+gqa:testdev:20922948
+gqa:testdev:20645793
+gqa:testdev:20896225

@@ -1,0 +1,891 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>PP3 Test10 Comparison</title><style>
+:root{--bg:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#e3e3e8;--head:#f5f5f7;--ok:#1a7f37;--bad:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#16161a;--fg:#ececf1;--muted:#9a9aa2;--line:#2e2e35;--head:#1f1f25;--ok:#4cc26d;--bad:#ff6b6b}}
+:root[data-theme=dark]{--bg:#16161a;--fg:#ececf1;--muted:#9a9aa2;--line:#2e2e35;--head:#1f1f25;--ok:#4cc26d;--bad:#ff6b6b}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0 auto;max-width:1200px;padding:24px 16px}
+h1{font-size:24px;margin:0 0 4px} h2{font-size:18px;margin:32px 0 6px}
+.note,.meta{color:var(--muted);font-size:13px} .scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;margin:8px 0} th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{background:var(--head);font-weight:600;font-size:13px} .num{text-align:right;font-variant-numeric:tabular-nums}
+.pos{color:var(--ok)} .neg{color:var(--bad)} .ok{color:var(--ok);font-weight:700} .bad{color:var(--bad);font-weight:700}
+.detail td{font-size:13px} .q{max-width:320px} summary{cursor:pointer;color:var(--muted);margin:6px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:14px 0} .card h3{margin:0 0 6px;font-size:16px}
+.sid{color:var(--muted);font-weight:400;font-size:12px} .prompt{white-space:pre-wrap;background:var(--head);padding:8px 10px;border-radius:6px;font:13px/1.45 ui-monospace,monospace;margin:6px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px} .tile{margin:0}
+.tile img{width:100%;height:auto;border-radius:4px;display:block} .tile figcaption{font-size:12.5px;margin-top:4px} .ans{font-family:ui-monospace,monospace}
+.warn{border-left:3px solid var(--bad);padding:8px 12px;background:var(--head);font-size:14px}
+</style></head><body>
+<h1>PP3 score head vs DSFold-D vs full tokens — 10 held-out samples per benchmark</h1>
+<p class=meta>Qwen3-VL-2B-Instruct · checkpoint outputs/pp3_scorer/checkpoints/score_head_3a_seed0.pt · DSFold params configs/dsfold_D-1.0.yaml · git 8c3b13b · NVIDIA GeForce RTX 5060 Ti · torch 2.14.1+cu130 · transformers 5.19.0<br>
+Samples: random seed 0 from GQA testdev-balanced, MMBench validation and MME test, disjoint from the dev_1k splits (MME: 5 images × 2 questions).</p>
+<p class=warn>Smoke comparison only. With 10 samples one answer moves accuracy by 0.10, so these numbers cannot show a difference from the full-token model; use the dev_1k paired results for conclusions. Accuracies of the three benchmarks are not averaged; MME score is not a percentage.</p>
+
+<section><h2>GQA testdev-balanced — accuracy</h2>
+<p class=note>Full-token accuracy on these 10 ids in the existing baseline run: 0.60 (sanity check for the fresh full-token run).</p>
+<div class=scroll><table><thead><tr><th>Run</th><th>Correct</th><th>Acc</th><th>Δ vs full</th><th>MME score</th><th>K/N</th><th>Input tok</th><th>Latency s*</th></tr></thead>
+<tbody><tr><td>Full tokens</td><td class=num>6/10</td><td class=num>0.60</td><td class='num '>+0</td><td class=num>—</td><td class=num>265/265</td><td class=num>290</td><td class=num>0.179</td></tr><tr><td>PP3 3a L5</td><td class=num>6/10</td><td class=num>0.60</td><td class='num '>+0</td><td class=num>—</td><td class=num>132/265</td><td class=num>158</td><td class=num>0.209</td></tr><tr><td>DSFold-D L5</td><td class=num>5/10</td><td class=num>0.50</td><td class='num neg'>-1</td><td class=num>—</td><td class=num>132/265</td><td class=num>158</td><td class=num>0.206</td></tr><tr><td>PP3 3a L4</td><td class=num>6/10</td><td class=num>0.60</td><td class='num '>+0</td><td class=num>—</td><td class=num>88/265</td><td class=num>114</td><td class=num>0.237</td></tr><tr><td>DSFold-D L4</td><td class=num>5/10</td><td class=num>0.50</td><td class='num neg'>-1</td><td class=num>—</td><td class=num>88/265</td><td class=num>114</td><td class=num>0.222</td></tr><tr><td>PP3 3a L3</td><td class=num>5/10</td><td class=num>0.50</td><td class='num neg'>-1</td><td class=num>—</td><td class=num>59/265</td><td class=num>84</td><td class=num>0.171</td></tr><tr><td>DSFold-D L3</td><td class=num>6/10</td><td class=num>0.60</td><td class='num '>+0</td><td class=num>—</td><td class=num>59/265</td><td class=num>84</td><td class=num>0.184</td></tr><tr><td>PP3 3a L1</td><td class=num>6/10</td><td class=num>0.60</td><td class='num '>+0</td><td class=num>—</td><td class=num>15/265</td><td class=num>40</td><td class=num>0.148</td></tr><tr><td>DSFold-D L1</td><td class=num>7/10</td><td class=num>0.70</td><td class='num pos'>+1</td><td class=num>—</td><td class=num>15/265</td><td class=num>40</td><td class=num>0.148</td></tr></tbody></table></div>
+<details><summary>Per-sample answers</summary><div class=scroll><table class=detail><thead><tr><th>Question</th><th>Reference</th><th>Full tokens</th><th>PP3 3a L5</th><th>DSFold-D L5</th><th>PP3 3a L4</th><th>DSFold-D L4</th><th>PP3 3a L3</th><th>DSFold-D L3</th><th>PP3 3a L1</th><th>DSFold-D L1</th></tr></thead>
+<tbody><tr><td class=q title='gqa:testdev:20306354'>Who wears a sweater?
+
+Answer with a short phrase.</td><td>woman</td><td><span class="ok">✓</span> woman</td><td><span class="ok">✓</span> woman</td><td><span class="bad">✗</span> man</td><td><span class="ok">✓</span> woman</td><td><span class="bad">✗</span> man</td><td><span class="bad">✗</span> girl</td><td><span class="bad">✗</span> man</td><td><span class="bad">✗</span> girl</td><td><span class="bad">✗</span> girl</td></tr><tr><td class=q title='gqa:testdev:20412448'>What is the vase on?
+
+Answer with a short phrase.</td><td>table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td><td><span class="ok">✓</span> table</td></tr><tr><td class=q title='gqa:testdev:20922948'>Is the brown car on the right?
+
+Answer with a short phrase.</td><td>yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> Yes</td></tr><tr><td class=q title='gqa:testdev:20896225'>What&#x27;s hanging from the cabinets?
+
+Answer with a short phrase.</td><td>towel</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> light</td><td><span class="bad">✗</span> plant</td><td><span class="bad">✗</span> light</td></tr><tr><td class=q title='gqa:testdev:20879187'>Do you see any green skateboards or bicycles?
+
+Answer with a short phrase.</td><td>no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td></tr><tr><td class=q title='gqa:testdev:201676561'>Is the window covered and brown?
+
+Answer with a short phrase.</td><td>no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td></tr><tr><td class=q title='gqa:testdev:202100613'>Are the boats still?
+
+Answer with a short phrase.</td><td>yes</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td></tr><tr><td class=q title='gqa:testdev:20645793'>Which part of the photo is the shelf in, the top or the bottom?
+
+Answer with a short phrase.</td><td>top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td><td><span class="ok">✓</span> top</td></tr><tr><td class=q title='gqa:testdev:20210976'>What is the food on top of the plate that is to the right of the packet?
+
+Answer with a short phrase.</td><td>chocolate</td><td><span class="bad">✗</span> cheesecake</td><td><span class="bad">✗</span> cheesecake</td><td><span class="bad">✗</span> cheesecake</td><td><span class="bad">✗</span> cheesecake</td><td><span class="bad">✗</span> cake</td><td><span class="bad">✗</span> cheesecake</td><td><span class="bad">✗</span> cake</td><td><span class="bad">✗</span> cake</td><td><span class="ok">✓</span> chocolate</td></tr><tr><td class=q title='gqa:testdev:202012386'>Are the shelves different in color than the plants?
+
+Answer with a short phrase.</td><td>yes</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td><td><span class="bad">✗</span> no</td></tr></tbody></table></div></details></section>
+<section><h2>MMBench validation — accuracy</h2>
+<p class=note>Full-token accuracy on these 10 ids in the existing baseline run: 0.90 (sanity check for the fresh full-token run).</p>
+<div class=scroll><table><thead><tr><th>Run</th><th>Correct</th><th>Acc</th><th>Δ vs full</th><th>MME score</th><th>K/N</th><th>Input tok</th><th>Latency s*</th></tr></thead>
+<tbody><tr><td>Full tokens</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>153/153</td><td class=num>235</td><td class=num>0.170</td></tr><tr><td>PP3 3a L5</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>77/153</td><td class=num>158</td><td class=num>0.213</td></tr><tr><td>DSFold-D L5</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>77/153</td><td class=num>158</td><td class=num>0.180</td></tr><tr><td>PP3 3a L4</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>51/153</td><td class=num>133</td><td class=num>0.275</td></tr><tr><td>DSFold-D L4</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>51/153</td><td class=num>133</td><td class=num>0.277</td></tr><tr><td>PP3 3a L3</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>—</td><td class=num>34/153</td><td class=num>116</td><td class=num>0.190</td></tr><tr><td>DSFold-D L3</td><td class=num>8/10</td><td class=num>0.80</td><td class='num neg'>-1</td><td class=num>—</td><td class=num>34/153</td><td class=num>116</td><td class=num>0.203</td></tr><tr><td>PP3 3a L1</td><td class=num>6/10</td><td class=num>0.60</td><td class='num neg'>-3</td><td class=num>—</td><td class=num>9/153</td><td class=num>91</td><td class=num>0.173</td></tr><tr><td>DSFold-D L1</td><td class=num>5/10</td><td class=num>0.50</td><td class='num neg'>-4</td><td class=num>—</td><td class=num>9/153</td><td class=num>91</td><td class=num>0.167</td></tr></tbody></table></div>
+<details><summary>Per-sample answers</summary><div class=scroll><table class=detail><thead><tr><th>Question</th><th>Reference</th><th>Full tokens</th><th>PP3 3a L5</th><th>DSFold-D L5</th><th>PP3 3a L4</th><th>DSFold-D L4</th><th>PP3 3a L3</th><th>DSFold-D L3</th><th>PP3 3a L1</th><th>DSFold-D L1</th></tr></thead>
+<tbody><tr><td class=q title='mmbench:validation:1555'>The object shown in this figure:
+
+Options:
+A. Is a lustrous, white metal that is highly reflective and ductile
+B. Has the highest electrical and thermal conduct</td><td>All of these options are correct.</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td></tr><tr><td class=q title='mmbench:validation:1000018'>What is correct Python code to generate the content of the image?
+
+Options:
+A. x = 1.10\ny = 1.0\nz = -35.59\n\nprint(type(x))\nprint(type(y))\nprint(type(z))\n</td><td>print(10 &gt; 9)\nprint(10 == 9)\nprint(10 &lt; 9)\n</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="bad">✗</span> B</td><td><span class="bad">✗</span> B</td><td><span class="bad">✗</span> B</td></tr><tr><td class=q title='mmbench:validation:1000685'>What is the object in this picture?
+
+Options:
+A. electric blanket
+B. quilt
+C. Bed sheet
+D. pillow
+
+Answer with the option letter only.</td><td>quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td><td><span class="ok">✓</span> B. quilt</td></tr><tr><td class=q title='mmbench:validation:1001623'>what style is this painting?
+
+Options:
+A. pen and ink
+B. ink wash painting
+C. watercolor painting
+D. gouache painting
+
+Answer with the option letter only.</td><td>watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td><td><span class="ok">✓</span> C. watercolor painting</td></tr><tr><td class=q title='mmbench:validation:1001771'>What can the formula in this picture be used to do?
+
+Options:
+A. To calculate the sum of two values.
+B. To calculate the area of an object.
+C. To calculate the </td><td>To calculate the probability of a particular event.</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="bad">✗</span> D</td></tr><tr><td class=q title='mmbench:validation:1001908'>What kind of human behavior does this picture describe?
+
+Options:
+A. A family is skiing down a snowy slope, gliding over the powder and enjoying the rush of adr</td><td>A man wearing a small hat and holding a red handbag greets those around him warmly with a smile</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="bad">✗</span> A</td><td><span class="bad">✗</span> A</td></tr><tr><td class=q title='mmbench:validation:2000463'>Context: Athens was one of the most powerful independent city-states in ancient Greece. Look at the definitions below. Then answer the question.
+
+Which of the f</td><td>My city rules itself and is not part of a larger country.</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td><td><span class="ok">✓</span> C</td></tr><tr><td class=q title='mmbench:validation:2000757'>Who is the person in this image?
+
+Options:
+A. Morgan Freeman
+B. Donald Trump
+C. Jackie Chan
+D. Xiang Liu
+
+Answer with the option letter only.</td><td>Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td><td><span class="ok">✓</span> A. Morgan Freeman</td></tr><tr><td class=q title='mmbench:validation:3001515'>how many donuts are there?
+
+Options:
+A. 1
+B. 3
+C. 4
+D. 2
+
+Answer with the option letter only.</td><td>2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="ok">✓</span> D. 2</td><td><span class="bad">✗</span> A. 1</td><td><span class="bad">✗</span> A. 1</td></tr><tr><td class=q title='mmbench:validation:3001753'>Which special day is associated with this poster?
+
+Options:
+A. National Reading Day.
+B. World Water Day.
+C. Mother&#x27;s Day
+D. Earth Day.
+
+Answer with the option l</td><td>National Reading Day.</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td><td><span class="ok">✓</span> A</td></tr></tbody></table></div></details></section>
+<section><h2>MME test — accuracy</h2>
+<p class=note>Full-token accuracy on these 10 ids in the existing baseline run: 0.90 (sanity check for the fresh full-token run).</p>
+<div class=scroll><table><thead><tr><th>Run</th><th>Correct</th><th>Acc</th><th>Δ vs full</th><th>MME score</th><th>K/N</th><th>Input tok</th><th>Latency s*</th></tr></thead>
+<tbody><tr><td>Full tokens</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>650.0</td><td class=num>3345/3345</td><td class=num>3383</td><td class=num>3.359</td></tr><tr><td>PP3 3a L5</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>650.0</td><td class=num>1673/3345</td><td class=num>1710</td><td class=num>3.631</td></tr><tr><td>DSFold-D L5</td><td class=num>8/10</td><td class=num>0.80</td><td class='num neg'>-1</td><td class=num>500.0</td><td class=num>1673/3345</td><td class=num>1710</td><td class=num>3.807</td></tr><tr><td>PP3 3a L4</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>650.0</td><td class=num>1115/3345</td><td class=num>1153</td><td class=num>3.515</td></tr><tr><td>DSFold-D L4</td><td class=num>8/10</td><td class=num>0.80</td><td class='num neg'>-1</td><td class=num>500.0</td><td class=num>1115/3345</td><td class=num>1153</td><td class=num>3.445</td></tr><tr><td>PP3 3a L3</td><td class=num>9/10</td><td class=num>0.90</td><td class='num '>+0</td><td class=num>650.0</td><td class=num>744/3345</td><td class=num>782</td><td class=num>3.170</td></tr><tr><td>DSFold-D L3</td><td class=num>8/10</td><td class=num>0.80</td><td class='num neg'>-1</td><td class=num>500.0</td><td class=num>744/3345</td><td class=num>782</td><td class=num>3.140</td></tr><tr><td>PP3 3a L1</td><td class=num>8/10</td><td class=num>0.80</td><td class='num neg'>-1</td><td class=num>500.0</td><td class=num>186/3345</td><td class=num>224</td><td class=num>2.881</td></tr><tr><td>DSFold-D L1</td><td class=num>7/10</td><td class=num>0.70</td><td class='num neg'>-2</td><td class=num>425.0</td><td class=num>186/3345</td><td class=num>224</td><td class=num>2.887</td></tr></tbody></table></div>
+<details><summary>Per-sample answers</summary><div class=scroll><table class=detail><thead><tr><th>Question</th><th>Reference</th><th>Full tokens</th><th>PP3 3a L5</th><th>DSFold-D L5</th><th>PP3 3a L4</th><th>DSFold-D L4</th><th>PP3 3a L3</th><th>DSFold-D L3</th><th>PP3 3a L1</th><th>DSFold-D L1</th></tr></thead>
+<tbody><tr><td class=q title='mme:test:artwork/18722.jpg:00000194'>Does this artwork exist in the form of painting? Please answer yes or no.
+
+Answer yes or no only.</td><td>Yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td></tr><tr><td class=q title='mme:test:artwork/18722.jpg:00000195'>Does this artwork exist in the form of sculpture? Please answer yes or no.
+
+Answer yes or no only.</td><td>No</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td></tr><tr><td class=q title='mme:test:commonsense_reasoning/0014.png:00000990'>In this line chart, the vertical axis is height and the horizontal axis is age. Does Maria&#x27;s height exceed Jane&#x27;s height in the end? Please answer yes or no.
+
+A</td><td>Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td><td><span class="ok">✓</span> Yes</td></tr><tr><td class=q title='mme:test:commonsense_reasoning/0014.png:00000991'>In this line chart, the vertical axis is height and the horizontal axis is age. Does Jane&#x27;s height exceed Kangkang&#x27;s height in the end? Please answer yes or no.</td><td>No</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td><td><span class="bad">✗</span> Yes</td></tr><tr><td class=q title='mme:test:landmark/05685b1070b828f5.jpg:00001236'>Is this a photo of Wurstelprater? Please answer yes or no.
+
+Answer yes or no only.</td><td>Yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td></tr><tr><td class=q title='mme:test:landmark/05685b1070b828f5.jpg:00001237'>Is this a photo of Nanmyaebonthar Sannandawya Sandamuni Pagoda? Please answer yes or no.
+
+Answer yes or no only.</td><td>No</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td></tr><tr><td class=q title='mme:test:landmark/0e04b4f7f9801ea9.jpg:00001292'>Is this a picture of Vase sculpture, Bremen? Please answer yes or no.
+
+Answer yes or no only.</td><td>Yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="bad">✗</span> no</td></tr><tr><td class=q title='mme:test:landmark/0e04b4f7f9801ea9.jpg:00001293'>Is this a picture of Mount Wilhelm? Please answer yes or no.
+
+Answer yes or no only.</td><td>No</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td></tr><tr><td class=q title='mme:test:posters/tt1300851.jpg:00002276'>Is this movie originated from the country or region of usa? Please answer yes or no.
+
+Answer yes or no only.</td><td>Yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td><td><span class="ok">✓</span> yes</td></tr><tr><td class=q title='mme:test:posters/tt1300851.jpg:00002277'>Is this movie originated from the country or region of germany? Please answer yes or no.
+
+Answer yes or no only.</td><td>No</td><td><span class="ok">✓</span> no</td><td><span class="ok">✓</span> no</td><td><span class="bad">✗</span> yes</td><td><span class="ok">✓</span> no</td><td><span class="bad">✗</span> yes</td><td><span class="ok">✓</span> no</td><td><span class="bad">✗</span> yes</td><td><span class="bad">✗</span> yes</td><td><span class="bad">✗</span> yes</td></tr></tbody></table></div></details></section>
+<section><h2>GQA testdev-balanced — kept tokens per sample</h2><p class=note>Green outline = token kept, dark = dropped. One cell = one merged visual token (2×2 patches of 16 px).</p><article class=card><h3>#1 <span class=sid>gqa:testdev:20306354</span></h3>
+<pre class=prompt>Who wears a sweater?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> woman</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_01_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×425 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 281<br>
+<span class="ok">✓</span> <span class=ans>woman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 151<br>
+<span class="ok">✓</span> <span class=ans>woman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 151<br>
+<span class="bad">✗</span> <span class=ans>man</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 108<br>
+<span class="ok">✓</span> <span class=ans>woman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 108<br>
+<span class="bad">✗</span> <span class=ans>man</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 79<br>
+<span class="bad">✗</span> <span class=ans>girl</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 79<br>
+<span class="bad">✗</span> <span class=ans>man</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 36<br>
+<span class="bad">✗</span> <span class=ans>girl</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_01_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 36<br>
+<span class="bad">✗</span> <span class=ans>girl</span></figcaption></figure></div></article><article class=card><h3>#2 <span class=sid>gqa:testdev:20412448</span></h3>
+<pre class=prompt>What is the vase on?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> table</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_02_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×427 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 282<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 152<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 152<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 80<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 80<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 37<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_02_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 37<br>
+<span class="ok">✓</span> <span class=ans>table</span></figcaption></figure></div></article><article class=card><h3>#3 <span class=sid>gqa:testdev:20922948</span></h3>
+<pre class=prompt>Is the brown car on the right?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_03_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×394 px → N = 240 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>240/240 tokens (100.0%) · LLM input 264<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>120/240 tokens (50.0%) · LLM input 144<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>120/240 tokens (50.0%) · LLM input 144<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>80/240 tokens (33.3%) · LLM input 104<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>80/240 tokens (33.3%) · LLM input 104<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>54/240 tokens (22.5%) · LLM input 78<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>54/240 tokens (22.5%) · LLM input 78<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>14/240 tokens (5.8%) · LLM input 38<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_03_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>14/240 tokens (5.8%) · LLM input 38<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure></div></article><article class=card><h3>#4 <span class=sid>gqa:testdev:20896225</span></h3>
+<pre class=prompt>What&#x27;s hanging from the cabinets?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> towel</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_04_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>600×403 px → N = 247 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>247/247 tokens (100.0%) · LLM input 270<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>124/247 tokens (50.2%) · LLM input 147<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>124/247 tokens (50.2%) · LLM input 147<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>83/247 tokens (33.6%) · LLM input 106<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>83/247 tokens (33.6%) · LLM input 106<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>55/247 tokens (22.3%) · LLM input 78<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>55/247 tokens (22.3%) · LLM input 78<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>14/247 tokens (5.7%) · LLM input 37<br>
+<span class="bad">✗</span> <span class=ans>plant</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_04_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>14/247 tokens (5.7%) · LLM input 37<br>
+<span class="bad">✗</span> <span class=ans>light</span></figcaption></figure></div></article><article class=card><h3>#5 <span class=sid>gqa:testdev:20879187</span></h3>
+<pre class=prompt>Do you see any green skateboards or bicycles?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> no</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_05_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×409 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 286<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 156<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 156<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 113<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 113<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 84<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 84<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 41<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_05_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 41<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#6 <span class=sid>gqa:testdev:201676561</span></h3>
+<pre class=prompt>Is the window covered and brown?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> no</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_06_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×427 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 283<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 153<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 153<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 110<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 110<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 81<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 81<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 38<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_06_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 38<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#7 <span class=sid>gqa:testdev:202100613</span></h3>
+<pre class=prompt>Are the boats still?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_07_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×413 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 281<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 151<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 151<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 108<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 108<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 79<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 79<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 36<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_07_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 36<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure></div></article><article class=card><h3>#8 <span class=sid>gqa:testdev:20645793</span></h3>
+<pre class=prompt>Which part of the photo is the shelf in, the top or the bottom?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> top</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_08_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>480×640 px → N = 300 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>300/300 tokens (100.0%) · LLM input 332<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>150/300 tokens (50.0%) · LLM input 182<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>150/300 tokens (50.0%) · LLM input 182<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>100/300 tokens (33.3%) · LLM input 132<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>100/300 tokens (33.3%) · LLM input 132<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>67/300 tokens (22.3%) · LLM input 99<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>67/300 tokens (22.3%) · LLM input 99<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>17/300 tokens (5.7%) · LLM input 49<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_08_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>17/300 tokens (5.7%) · LLM input 49<br>
+<span class="ok">✓</span> <span class=ans>top</span></figcaption></figure></div></article><article class=card><h3>#9 <span class=sid>gqa:testdev:20210976</span></h3>
+<pre class=prompt>What is the food on top of the plate that is to the right of the packet?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> chocolate</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_09_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×480 px → N = 300 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>300/300 tokens (100.0%) · LLM input 334<br>
+<span class="bad">✗</span> <span class=ans>cheesecake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>150/300 tokens (50.0%) · LLM input 184<br>
+<span class="bad">✗</span> <span class=ans>cheesecake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>150/300 tokens (50.0%) · LLM input 184<br>
+<span class="bad">✗</span> <span class=ans>cheesecake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>100/300 tokens (33.3%) · LLM input 134<br>
+<span class="bad">✗</span> <span class=ans>cheesecake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>100/300 tokens (33.3%) · LLM input 134<br>
+<span class="bad">✗</span> <span class=ans>cake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>67/300 tokens (22.3%) · LLM input 101<br>
+<span class="bad">✗</span> <span class=ans>cheesecake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>67/300 tokens (22.3%) · LLM input 101<br>
+<span class="bad">✗</span> <span class=ans>cake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>17/300 tokens (5.7%) · LLM input 51<br>
+<span class="bad">✗</span> <span class=ans>cake</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_09_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>17/300 tokens (5.7%) · LLM input 51<br>
+<span class="ok">✓</span> <span class=ans>chocolate</span></figcaption></figure></div></article><article class=card><h3>#10 <span class=sid>gqa:testdev:202012386</span></h3>
+<pre class=prompt>Are the shelves different in color than the plants?
+
+Answer with a short phrase.</pre>
+<p><b>Reference:</b> yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/gqa_10_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>640×429 px → N = 260 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>260/260 tokens (100.0%) · LLM input 286<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>130/260 tokens (50.0%) · LLM input 156<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>130/260 tokens (50.0%) · LLM input 156<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>87/260 tokens (33.5%) · LLM input 113<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>87/260 tokens (33.5%) · LLM input 113<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>58/260 tokens (22.3%) · LLM input 84<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>58/260 tokens (22.3%) · LLM input 84<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/260 tokens (5.8%) · LLM input 41<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/gqa_10_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/260 tokens (5.8%) · LLM input 41<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure></div></article></section><section><h2>MMBench validation — kept tokens per sample</h2><p class=note>Green outline = token kept, dark = dropped. One cell = one merged visual token (2×2 patches of 16 px).</p><article class=card><h3>#1 <span class=sid>mmbench:validation:1555</span></h3>
+<pre class=prompt>The object shown in this figure:
+
+Options:
+A. Is a lustrous, white metal that is highly reflective and ductile
+B. Has the highest electrical and thermal conductivity of all metals
+C. Has a boiling point of 2,162°C
+D. All of these options are correct.
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> All of these options are correct.</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_01_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>512×436 px → N = 224 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>224/224 tokens (100.0%) · LLM input 305<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>112/224 tokens (50.0%) · LLM input 193<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>112/224 tokens (50.0%) · LLM input 193<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>75/224 tokens (33.5%) · LLM input 156<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>75/224 tokens (33.5%) · LLM input 156<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>50/224 tokens (22.3%) · LLM input 131<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>50/224 tokens (22.3%) · LLM input 131<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>13/224 tokens (5.8%) · LLM input 94<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_01_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>13/224 tokens (5.8%) · LLM input 94<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure></div></article><article class=card><h3>#2 <span class=sid>mmbench:validation:1000018</span></h3>
+<pre class=prompt>What is correct Python code to generate the content of the image?
+
+Options:
+A. x = 1.10\ny = 1.0\nz = -35.59\n\nprint(type(x))\nprint(type(y))\nprint(type(z))\n
+B. x = 1\ny = 2.8\nz = 1j\n\nprint(type(x))\nprint(type(y))\nprint(type(z))\n
+C. print(10 &gt; 9)\nprint(10 == 9)\nprint(10 &lt; 9)\n
+D. x = lambda a: a + 10\nprint(x(5))
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> print(10 &gt; 9)\nprint(10 == 9)\nprint(10 &lt; 9)\n</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_02_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>261×244 px → N = 64 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>64/64 tokens (100.0%) · LLM input 230<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>32/64 tokens (50.0%) · LLM input 198<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>32/64 tokens (50.0%) · LLM input 198<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>22/64 tokens (34.4%) · LLM input 188<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>22/64 tokens (34.4%) · LLM input 188<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>15/64 tokens (23.4%) · LLM input 181<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>15/64 tokens (23.4%) · LLM input 181<br>
+<span class="bad">✗</span> <span class=ans>B</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>4/64 tokens (6.2%) · LLM input 170<br>
+<span class="bad">✗</span> <span class=ans>B</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_02_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>4/64 tokens (6.2%) · LLM input 170<br>
+<span class="bad">✗</span> <span class=ans>B</span></figcaption></figure></div></article><article class=card><h3>#3 <span class=sid>mmbench:validation:1000685</span></h3>
+<pre class=prompt>What is the object in this picture?
+
+Options:
+A. electric blanket
+B. quilt
+C. Bed sheet
+D. pillow
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> quilt</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_03_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>512×390 px → N = 192 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>192/192 tokens (100.0%) · LLM input 237<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>96/192 tokens (50.0%) · LLM input 141<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>96/192 tokens (50.0%) · LLM input 141<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>64/192 tokens (33.3%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>64/192 tokens (33.3%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>43/192 tokens (22.4%) · LLM input 88<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>43/192 tokens (22.4%) · LLM input 88<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>11/192 tokens (5.7%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_03_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>11/192 tokens (5.7%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>B. quilt</span></figcaption></figure></div></article><article class=card><h3>#4 <span class=sid>mmbench:validation:1001623</span></h3>
+<pre class=prompt>what style is this painting?
+
+Options:
+A. pen and ink
+B. ink wash painting
+C. watercolor painting
+D. gouache painting
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> watercolor painting</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_04_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>330×400 px → N = 120 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>120/120 tokens (100.0%) · LLM input 169<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>60/120 tokens (50.0%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>60/120 tokens (50.0%) · LLM input 109<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>40/120 tokens (33.3%) · LLM input 89<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>40/120 tokens (33.3%) · LLM input 89<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>27/120 tokens (22.5%) · LLM input 76<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>27/120 tokens (22.5%) · LLM input 76<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>7/120 tokens (5.8%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_04_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>7/120 tokens (5.8%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>C. watercolor painting</span></figcaption></figure></div></article><article class=card><h3>#5 <span class=sid>mmbench:validation:1001771</span></h3>
+<pre class=prompt>What can the formula in this picture be used to do?
+
+Options:
+A. To calculate the sum of two values.
+B. To calculate the area of an object.
+C. To calculate the probability of a particular event.
+D. To calculate the distance of two points.
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> To calculate the probability of a particular event.</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_05_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>240×100 px → N = 78 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>78/78 tokens (100.0%) · LLM input 150<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>39/78 tokens (50.0%) · LLM input 111<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>39/78 tokens (50.0%) · LLM input 111<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>26/78 tokens (33.3%) · LLM input 98<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>26/78 tokens (33.3%) · LLM input 98<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>18/78 tokens (23.1%) · LLM input 90<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>18/78 tokens (23.1%) · LLM input 90<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>5/78 tokens (6.4%) · LLM input 77<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_05_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>5/78 tokens (6.4%) · LLM input 77<br>
+<span class="bad">✗</span> <span class=ans>D</span></figcaption></figure></div></article><article class=card><h3>#6 <span class=sid>mmbench:validation:1001908</span></h3>
+<pre class=prompt>What kind of human behavior does this picture describe?
+
+Options:
+A. A family is skiing down a snowy slope, gliding over the powder and enjoying the rush of adrenaline as they cut through the mountain air.
+B. A group of artists are painting a mural on a building façade, using bright colors and bold strokes to create a visually striking masterpiece.
+C. A man wearing a small hat and holding a red handbag greets those around him warmly with a smile
+D. A writer is brainstorming ideas for a novel in a cozy library, scribbling notes on a notepad and pondering the possibilities.
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> A man wearing a small hat and holding a red handbag greets those around him warmly with a smile</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_06_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>512×505 px → N = 256 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>256/256 tokens (100.0%) · LLM input 398<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>128/256 tokens (50.0%) · LLM input 270<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>128/256 tokens (50.0%) · LLM input 270<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>86/256 tokens (33.6%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>86/256 tokens (33.6%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>57/256 tokens (22.3%) · LLM input 199<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>57/256 tokens (22.3%) · LLM input 199<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/256 tokens (5.9%) · LLM input 157<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_06_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/256 tokens (5.9%) · LLM input 157<br>
+<span class="bad">✗</span> <span class=ans>A</span></figcaption></figure></div></article><article class=card><h3>#7 <span class=sid>mmbench:validation:2000463</span></h3>
+<pre class=prompt>Context: Athens was one of the most powerful independent city-states in ancient Greece. Look at the definitions below. Then answer the question.
+
+Which of the following statements describess living in an independent city-state?
+
+Options:
+A. All the decisions about my city are made by a faraway emperor.
+B. I vote for a president that rules over many different cities.
+C. My city rules itself and is not part of a larger country.
+D. I live by myself in the wilderness.
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> My city rules itself and is not part of a larger country.</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_07_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>368×125 px → N = 70 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>70/70 tokens (100.0%) · LLM input 186<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>35/70 tokens (50.0%) · LLM input 151<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>35/70 tokens (50.0%) · LLM input 151<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>24/70 tokens (34.3%) · LLM input 140<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>24/70 tokens (34.3%) · LLM input 140<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>16/70 tokens (22.9%) · LLM input 132<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>16/70 tokens (22.9%) · LLM input 132<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>4/70 tokens (5.7%) · LLM input 120<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_07_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>4/70 tokens (5.7%) · LLM input 120<br>
+<span class="ok">✓</span> <span class=ans>C</span></figcaption></figure></div></article><article class=card><h3>#8 <span class=sid>mmbench:validation:2000757</span></h3>
+<pre class=prompt>Who is the person in this image?
+
+Options:
+A. Morgan Freeman
+B. Donald Trump
+C. Jackie Chan
+D. Xiang Liu
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> Morgan Freeman</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_08_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>198×255 px → N = 80 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>80/80 tokens (100.0%) · LLM input 128<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>40/80 tokens (50.0%) · LLM input 88<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>40/80 tokens (50.0%) · LLM input 88<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>27/80 tokens (33.8%) · LLM input 75<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>27/80 tokens (33.8%) · LLM input 75<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>18/80 tokens (22.5%) · LLM input 66<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>18/80 tokens (22.5%) · LLM input 66<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>5/80 tokens (6.2%) · LLM input 53<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_08_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>5/80 tokens (6.2%) · LLM input 53<br>
+<span class="ok">✓</span> <span class=ans>A. Morgan Freeman</span></figcaption></figure></div></article><article class=card><h3>#9 <span class=sid>mmbench:validation:3001515</span></h3>
+<pre class=prompt>how many donuts are there?
+
+Options:
+A. 1
+B. 3
+C. 4
+D. 2
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> 2</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_09_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>512×384 px → N = 192 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>192/192 tokens (100.0%) · LLM input 238<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>96/192 tokens (50.0%) · LLM input 142<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>96/192 tokens (50.0%) · LLM input 142<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>64/192 tokens (33.3%) · LLM input 110<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>64/192 tokens (33.3%) · LLM input 110<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>43/192 tokens (22.4%) · LLM input 89<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>43/192 tokens (22.4%) · LLM input 89<br>
+<span class="ok">✓</span> <span class=ans>D. 2</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>11/192 tokens (5.7%) · LLM input 57<br>
+<span class="bad">✗</span> <span class=ans>A. 1</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_09_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>11/192 tokens (5.7%) · LLM input 57<br>
+<span class="bad">✗</span> <span class=ans>A. 1</span></figcaption></figure></div></article><article class=card><h3>#10 <span class=sid>mmbench:validation:3001753</span></h3>
+<pre class=prompt>Which special day is associated with this poster?
+
+Options:
+A. National Reading Day.
+B. World Water Day.
+C. Mother&#x27;s Day
+D. Earth Day.
+
+Answer with the option letter only.</pre>
+<p><b>Reference:</b> National Reading Day.</p><div class=tiles><figure class=tile><img loading=lazy src="img/mmb_10_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>512×512 px → N = 256 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>256/256 tokens (100.0%) · LLM input 307<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>128/256 tokens (50.0%) · LLM input 179<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>128/256 tokens (50.0%) · LLM input 179<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>86/256 tokens (33.6%) · LLM input 137<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>86/256 tokens (33.6%) · LLM input 137<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>57/256 tokens (22.3%) · LLM input 108<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>57/256 tokens (22.3%) · LLM input 108<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>15/256 tokens (5.9%) · LLM input 66<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mmb_10_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>15/256 tokens (5.9%) · LLM input 66<br>
+<span class="ok">✓</span> <span class=ans>A</span></figcaption></figure></div></article></section><section><h2>MME test — kept tokens per sample</h2><p class=note>Green outline = token kept, dark = dropped. One cell = one merged visual token (2×2 patches of 16 px).</p><article class=card><h3>#1 <span class=sid>mme:test:artwork/18722.jpg:00000194</span></h3>
+<pre class=prompt>Does this artwork exist in the form of painting? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> Yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_01_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>684×896 px → N = 588 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>588/588 tokens (100.0%) · LLM input 620<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>294/588 tokens (50.0%) · LLM input 326<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>294/588 tokens (50.0%) · LLM input 326<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>196/588 tokens (33.3%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>196/588 tokens (33.3%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>131/588 tokens (22.3%) · LLM input 163<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>131/588 tokens (22.3%) · LLM input 163<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>33/588 tokens (5.6%) · LLM input 65<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_01_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>33/588 tokens (5.6%) · LLM input 65<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure></div></article><article class=card><h3>#2 <span class=sid>mme:test:artwork/18722.jpg:00000195</span></h3>
+<pre class=prompt>Does this artwork exist in the form of sculpture? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> No</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_02_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>684×896 px → N = 588 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>588/588 tokens (100.0%) · LLM input 620<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>294/588 tokens (50.0%) · LLM input 326<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>294/588 tokens (50.0%) · LLM input 326<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>196/588 tokens (33.3%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>196/588 tokens (33.3%) · LLM input 228<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>131/588 tokens (22.3%) · LLM input 163<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>131/588 tokens (22.3%) · LLM input 163<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>33/588 tokens (5.6%) · LLM input 65<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_02_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>33/588 tokens (5.6%) · LLM input 65<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#3 <span class=sid>mme:test:commonsense_reasoning/0014.png:00000990</span></h3>
+<pre class=prompt>In this line chart, the vertical axis is height and the horizontal axis is age. Does Maria&#x27;s height exceed Jane&#x27;s height in the end? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> Yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_03_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>1142×684 px → N = 756 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>756/756 tokens (100.0%) · LLM input 807<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>378/756 tokens (50.0%) · LLM input 429<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>378/756 tokens (50.0%) · LLM input 429<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>252/756 tokens (33.3%) · LLM input 303<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>252/756 tokens (33.3%) · LLM input 303<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>168/756 tokens (22.2%) · LLM input 219<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>168/756 tokens (22.2%) · LLM input 219<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>42/756 tokens (5.6%) · LLM input 93<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_03_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>42/756 tokens (5.6%) · LLM input 93<br>
+<span class="ok">✓</span> <span class=ans>Yes</span></figcaption></figure></div></article><article class=card><h3>#4 <span class=sid>mme:test:commonsense_reasoning/0014.png:00000991</span></h3>
+<pre class=prompt>In this line chart, the vertical axis is height and the horizontal axis is age. Does Jane&#x27;s height exceed Kangkang&#x27;s height in the end? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> No</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_04_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>1142×684 px → N = 756 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>756/756 tokens (100.0%) · LLM input 809<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>378/756 tokens (50.0%) · LLM input 431<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>378/756 tokens (50.0%) · LLM input 431<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>252/756 tokens (33.3%) · LLM input 305<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>252/756 tokens (33.3%) · LLM input 305<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>168/756 tokens (22.2%) · LLM input 221<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>168/756 tokens (22.2%) · LLM input 221<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>42/756 tokens (5.6%) · LLM input 95<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_04_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>42/756 tokens (5.6%) · LLM input 95<br>
+<span class="bad">✗</span> <span class=ans>Yes</span></figcaption></figure></div></article><article class=card><h3>#5 <span class=sid>mme:test:landmark/05685b1070b828f5.jpg:00001236</span></h3>
+<pre class=prompt>Is this a photo of Wurstelprater? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> Yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_05_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>4288×2848 px → N = 11926 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>11926/11926 tokens (100.0%) · LLM input 11959<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>5963/11926 tokens (50.0%) · LLM input 5996<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>5963/11926 tokens (50.0%) · LLM input 5996<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>3976/11926 tokens (33.3%) · LLM input 4009<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>3976/11926 tokens (33.3%) · LLM input 4009<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>2651/11926 tokens (22.2%) · LLM input 2684<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>2651/11926 tokens (22.2%) · LLM input 2684<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>663/11926 tokens (5.6%) · LLM input 696<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_05_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>663/11926 tokens (5.6%) · LLM input 696<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure></div></article><article class=card><h3>#6 <span class=sid>mme:test:landmark/05685b1070b828f5.jpg:00001237</span></h3>
+<pre class=prompt>Is this a photo of Nanmyaebonthar Sannandawya Sandamuni Pagoda? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> No</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_06_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>4288×2848 px → N = 11926 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>11926/11926 tokens (100.0%) · LLM input 11970<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>5963/11926 tokens (50.0%) · LLM input 6007<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>5963/11926 tokens (50.0%) · LLM input 6007<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>3976/11926 tokens (33.3%) · LLM input 4020<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>3976/11926 tokens (33.3%) · LLM input 4020<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>2651/11926 tokens (22.2%) · LLM input 2695<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>2651/11926 tokens (22.2%) · LLM input 2695<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>663/11926 tokens (5.6%) · LLM input 707<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_06_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>663/11926 tokens (5.6%) · LLM input 707<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#7 <span class=sid>mme:test:landmark/0e04b4f7f9801ea9.jpg:00001292</span></h3>
+<pre class=prompt>Is this a picture of Vase sculpture, Bremen? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> Yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_07_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>2048×1536 px → N = 3072 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>3072/3072 tokens (100.0%) · LLM input 3106<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>1536/3072 tokens (50.0%) · LLM input 1570<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>1536/3072 tokens (50.0%) · LLM input 1570<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>1024/3072 tokens (33.3%) · LLM input 1058<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>1024/3072 tokens (33.3%) · LLM input 1058<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>683/3072 tokens (22.2%) · LLM input 717<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>683/3072 tokens (22.2%) · LLM input 717<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>171/3072 tokens (5.6%) · LLM input 205<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_07_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>171/3072 tokens (5.6%) · LLM input 205<br>
+<span class="bad">✗</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#8 <span class=sid>mme:test:landmark/0e04b4f7f9801ea9.jpg:00001293</span></h3>
+<pre class=prompt>Is this a picture of Mount Wilhelm? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> No</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_08_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>2048×1536 px → N = 3072 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>3072/3072 tokens (100.0%) · LLM input 3102<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>1536/3072 tokens (50.0%) · LLM input 1566<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>1536/3072 tokens (50.0%) · LLM input 1566<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>1024/3072 tokens (33.3%) · LLM input 1054<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>1024/3072 tokens (33.3%) · LLM input 1054<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>683/3072 tokens (22.2%) · LLM input 713<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>683/3072 tokens (22.2%) · LLM input 713<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>171/3072 tokens (5.6%) · LLM input 201<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_08_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>171/3072 tokens (5.6%) · LLM input 201<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure></div></article><article class=card><h3>#9 <span class=sid>mme:test:posters/tt1300851.jpg:00002276</span></h3>
+<pre class=prompt>Is this movie originated from the country or region of usa? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> Yes</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_09_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>500×754 px → N = 384 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>384/384 tokens (100.0%) · LLM input 418<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>192/384 tokens (50.0%) · LLM input 226<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>192/384 tokens (50.0%) · LLM input 226<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>128/384 tokens (33.3%) · LLM input 162<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>128/384 tokens (33.3%) · LLM input 162<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>86/384 tokens (22.4%) · LLM input 120<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>86/384 tokens (22.4%) · LLM input 120<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>22/384 tokens (5.7%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_09_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>22/384 tokens (5.7%) · LLM input 56<br>
+<span class="ok">✓</span> <span class=ans>yes</span></figcaption></figure></div></article><article class=card><h3>#10 <span class=sid>mme:test:posters/tt1300851.jpg:00002277</span></h3>
+<pre class=prompt>Is this movie originated from the country or region of germany? Please answer yes or no.
+
+Answer yes or no only.</pre>
+<p><b>Reference:</b> No</p><div class=tiles><figure class=tile><img loading=lazy src="img/mme_10_orig.jpg" alt="original">
+<figcaption><b>Original image</b><br>500×754 px → N = 384 visual tokens</figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_Full_tokens.jpg" alt="Full tokens">
+<figcaption><b>Baseline (full tokens)</b><br>384/384 tokens (100.0%) · LLM input 418<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_PP3_3a_L5.jpg" alt="PP3 3a L5">
+<figcaption><b>PP3 3a L5</b><br>192/384 tokens (50.0%) · LLM input 226<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_DSFoldD_L5.jpg" alt="DSFold-D L5">
+<figcaption><b>DSFold-D L5</b><br>192/384 tokens (50.0%) · LLM input 226<br>
+<span class="bad">✗</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_PP3_3a_L4.jpg" alt="PP3 3a L4">
+<figcaption><b>PP3 3a L4</b><br>128/384 tokens (33.3%) · LLM input 162<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_DSFoldD_L4.jpg" alt="DSFold-D L4">
+<figcaption><b>DSFold-D L4</b><br>128/384 tokens (33.3%) · LLM input 162<br>
+<span class="bad">✗</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_PP3_3a_L3.jpg" alt="PP3 3a L3">
+<figcaption><b>PP3 3a L3</b><br>86/384 tokens (22.4%) · LLM input 120<br>
+<span class="ok">✓</span> <span class=ans>no</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_DSFoldD_L3.jpg" alt="DSFold-D L3">
+<figcaption><b>DSFold-D L3</b><br>86/384 tokens (22.4%) · LLM input 120<br>
+<span class="bad">✗</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_PP3_3a_L1.jpg" alt="PP3 3a L1">
+<figcaption><b>PP3 3a L1</b><br>22/384 tokens (5.7%) · LLM input 56<br>
+<span class="bad">✗</span> <span class=ans>yes</span></figcaption></figure><figure class=tile><img loading=lazy src="img/mme_10_DSFoldD_L1.jpg" alt="DSFold-D L1">
+<figcaption><b>DSFold-D L1</b><br>22/384 tokens (5.7%) · LLM input 56<br>
+<span class="bad">✗</span> <span class=ans>yes</span></figcaption></figure></div></article></section>
+<p class=note>* Mean latency excludes the first sample of each run (GPU warm-up). Δ vs full = correct answers minus the full-token run's correct answers on the same ids.</p>
+</body></html>
