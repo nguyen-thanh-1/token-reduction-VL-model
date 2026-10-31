@@ -126,6 +126,10 @@ The proposed (not yet implemented) DSFold intervention is drawn on a copy of
 this diagram in `architecture/dsfold-proposal/`, and described in
 `docs/research/dsfold-method-proposal.md`.
 
+The implemented PP3 method (DSFold with a learned score head, variant 3a) is
+drawn on a further copy in `architecture/pp3-dsfold-scorer/`, with panels for
+the score-head architecture, its offline training flow, and GQA dev results.
+
 The diagram is checkpoint-specific, not copied from a generic larger Qwen3-VL
 diagram. For the inspected 2B checkpoint, the ViT hidden size is 1024, the
 language hidden size is 2048, and the fixed zero-based DeepStack visual indexes

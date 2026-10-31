@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -50,15 +51,25 @@ def encode_fixtures(split: Path) -> None:
         for sample in tqdm(samples, desc=relative):
             text = question_text_for_scoring(sample.question, sample.metadata.get("choices") or [])
             encoded = runner.encode(sample.image, sample.question, text)
-            name = sample.sample_id.replace(":", "_")
-            save_fixture(FIXTURES / f"{name}.npz", runner.pruner_input(encoded, None), sample_id=sample.sample_id)
+            path = FIXTURES / fixture_name(sample.sample_id)
+            save_fixture(path, runner.pruner_input(encoded, None), sample_id=sample.sample_id)
     print(f"Saved fixtures to {FIXTURES}")
+
+
+def fixture_name(sample_id: str) -> str:
+    """Flat, filesystem-safe file name; MME ids contain '/' and ':'."""
+
+    return re.sub(r"[^A-Za-z0-9._-]", "_", sample_id) + ".npz"
 
 
 def write_reference(impl: str) -> None:
     base_cls = importlib.import_module(f"token_reduction_vl.pruning.{impl}.dsfold_base").DSFoldBase
     entries = []
-    for path in tqdm(sorted(FIXTURES.glob("*.npz")), desc="reference"):
+    paths = sorted(FIXTURES.glob("*.npz"))
+    nested = [path for path in FIXTURES.rglob("*.npz") if path.parent != FIXTURES]
+    if nested:
+        raise SystemExit(f"{len(nested)} fixtures are in sub-folders (old naming); re-run the encoding step first.")
+    for path in tqdm(paths, desc="reference"):
         for level in REFERENCE_LEVELS:
             sample_id, x = load_fixture(path, BUDGET_LEVELS[level])
             out = base_cls().select(x)

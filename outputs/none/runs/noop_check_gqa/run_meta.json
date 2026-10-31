@@ -1,0 +1,23 @@
+{
+  "run_id": "noop_check_gqa",
+  "method": "none",
+  "variant": "default",
+  "level": "L7",
+  "source": "gqa_testdev_balanced",
+  "split": "full",
+  "limit": 100,
+  "config": "none",
+  "dsfold_params": null,
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-10-30T23:28:30+00:00",
+  "finished_at": "2026-10-30T23:28:47+00:00",
+  "rows": 100,
+  "errors": 0,
+  "git_sha": "fe7ee1166a852b44aea3f710bf3b5c1d6f2c4367",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

@@ -97,28 +97,35 @@ def stored_sample_ids(directory: Path, prefix: str) -> set[str]:
     return done
 
 
+SHARD_ARRAYS = ("v", "f", "z_rel", "z_ms", "q", "saliency", "offsets", "q_offsets", "grid", "meta")
+
+
 def iter_shard(path: Path) -> Iterator[SaliencyRecord]:
-    data = np.load(path)
-    ids = json.loads(str(data["meta"]))
-    offsets, q_offsets = data["offsets"], data["q_offsets"]
+    # NpzFile re-reads the whole member on every ``data[key]`` access, so read each
+    # array once and copy the per-sample slices; otherwise every record keeps a
+    # view of a fresh full-shard array alive and memory explodes.
+    with np.load(path) as data:
+        arrays = {key: data[key] for key in SHARD_ARRAYS}
+    ids = json.loads(str(arrays["meta"]))
+    offsets, q_offsets, grid = arrays["offsets"], arrays["q_offsets"], arrays["grid"]
     for index, (sample_id, image_id) in enumerate(ids):
         start, end = int(offsets[index]), int(offsets[index + 1])
         q_start, q_end = int(q_offsets[index]), int(q_offsets[index + 1])
         yield SaliencyRecord(
             sample_id=sample_id,
             image_id=image_id,
-            grid_hw=(int(data["grid"][index][0]), int(data["grid"][index][1])),
-            v=data["v"][start:end],
-            f=data["f"][:, start:end],
-            z_rel=data["z_rel"][start:end],
-            z_ms=data["z_ms"][start:end],
-            q=data["q"][q_start:q_end],
-            saliency=data["saliency"][start:end],
+            grid_hw=(int(grid[index][0]), int(grid[index][1])),
+            v=arrays["v"][start:end].copy(),
+            f=arrays["f"][:, start:end].copy(),
+            z_rel=arrays["z_rel"][start:end].copy(),
+            z_ms=arrays["z_ms"][start:end].copy(),
+            q=arrays["q"][q_start:q_end].copy(),
+            saliency=arrays["saliency"][start:end].copy(),
         )
 
 
 def load_records(directory: Path, prefix: str, max_samples: int | None = None) -> list[SaliencyRecord]:
-    """Load shards into memory (≈ 240 KB per GQA sample; 50k samples ≈ 12 GB RAM)."""
+    """Load shards into memory (≈ 170 KB per GQA sample; 50k samples ≈ 8–9 GB RAM)."""
 
     records: list[SaliencyRecord] = []
     for path in sorted(directory.glob(f"{prefix}_*.npz")):
