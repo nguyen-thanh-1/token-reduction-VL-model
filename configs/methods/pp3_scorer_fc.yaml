@@ -1,0 +1,57 @@
+# PP3 focus + context selection (ADR 0004). Global head: 3d_attn50k (context); focus head: 3d trained on
+# contrastive attention targets (question-specific part of the LLM attention).
+# Train the focus head: scripts/pp3/train_score_head.py --config <this>.
+method: pp3_scorer
+factory: token_reduction_vl.pruning.pp3_scorer.focus_context:build_pruner
+dsfold_params: configs/dsfold_D-1.0.yaml
+
+model:
+  id: Qwen/Qwen3-VL-2B-Instruct
+  dtype: auto
+  device_map: auto
+  attn_implementation: null
+  max_new_tokens: 32
+
+# Fixed PCA used before storing features and again at inference.
+compressor: data/features/pp3_scorer/compressor.npz
+compressor_fit:
+  num_samples: 1000          # first ids of the training split
+  v_dim: 256
+  level_dim: 64
+  q_dim: 256
+
+labels:
+  split: configs/splits/gqa_train_50k.txt
+  canonical: data/processed/v1/gqa/train.jsonl
+  output_dir: data/features/pp3_scorer
+  prefix: attn_gqa_train
+  layers: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]   # LLM decoder layers averaged (of 28)
+  shard_size: 500           # samples per shard; an interruption loses at most one shard's worth
+
+route_b:
+  arch: 3d                   # 3a MLP | 3b CNN | 3c transformer | 3d text-guided
+  name: 3d_contrast
+  loss: distill              # cross-entropy to the attention distribution
+  label: contrast            # p minus the mean of the image's other questions (ADR 0004)
+  contrast_source: mix       # teacher rows used for the contrast: primary | question | mix
+  mix: 0.5
+  epochs: 20
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 16
+  temperature: 1.0           # P ∝ teacher^(1/T); > 1 softens attention sinks
+  holdout_fraction: 0.1
+  patience: 3
+  seeds: [0]
+  output_dir: outputs/pp3_scorer/checkpoints
+
+# Heads used at inference (scripts/common/run_pruned.py, run_diagnostics.py, interactive_pruned.py).
+checkpoint: outputs/pp3_scorer/checkpoints/score_head_3d_attn50k_seed0.pt        # context (global quality)
+focus_checkpoint: outputs/pp3_scorer/checkpoints/score_head_3d_contrast_seed0.pt  # focus
+
+focus_context:
+  beta: 1.0          # adjacency bonus in std units of the focus score (0 = plain top-K)
+  share_min: 0.3     # focus share of K when the focus map is flat
+  share_max: 0.8     # focus share of K when it is peaked
+  peak_top: 0.1      # peakedness = focus mass on the top 10% tokens
+  context_dpp: 0     # 1 = context by DPP on the global quality (3d_attn50k selection); 0 = coarse grid

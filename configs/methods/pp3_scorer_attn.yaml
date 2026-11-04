@@ -1,0 +1,47 @@
+# PP3 — DSFold + score head 3d distilled from the LLM's text-to-image attention (ADR 0003).
+# Labels: scripts/pp3/make_attention_labels.py; training: scripts/pp3/train_score_head.py --config <this>.
+method: pp3_scorer
+factory: token_reduction_vl.pruning.pp3_scorer.factory:build_pruner
+dsfold_params: configs/dsfold_D-1.0.yaml
+
+model:
+  id: Qwen/Qwen3-VL-2B-Instruct
+  dtype: auto
+  device_map: auto
+  attn_implementation: null
+  max_new_tokens: 32
+
+# Fixed PCA used before storing features and again at inference.
+compressor: data/features/pp3_scorer/compressor.npz
+compressor_fit:
+  num_samples: 1000          # first ids of the training split
+  v_dim: 256
+  level_dim: 64
+  q_dim: 256
+
+labels:
+  split: configs/splits/gqa_train_50k.txt
+  canonical: data/processed/v1/gqa/train.jsonl
+  output_dir: data/features/pp3_scorer
+  prefix: attn_gqa_train
+  layers: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]   # LLM decoder layers averaged (of 28)
+  shard_size: 500           # samples per shard; an interruption loses at most one shard's worth
+
+route_b:
+  arch: 3d                   # 3a MLP | 3b CNN | 3c transformer | 3d text-guided
+  name: 3d_attn
+  loss: distill              # cross-entropy to the attention distribution
+  label: mix                 # primary (answer rows) | question | mix
+  mix: 0.5
+  epochs: 10
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 16
+  temperature: 1.0           # P ∝ teacher^(1/T); > 1 softens attention sinks
+  holdout_fraction: 0.1
+  patience: 3
+  seeds: [0]
+  output_dir: outputs/pp3_scorer/checkpoints
+
+# Set after training; used by scripts/common/run_pruned.py.
+checkpoint: outputs/pp3_scorer/checkpoints/score_head_3d_attn_seed0.pt

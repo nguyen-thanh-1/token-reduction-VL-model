@@ -30,7 +30,8 @@ Cấu trúc code và nơi lưu kết quả của cả nhóm: [`../METHODS.md`](.
 | # | Việc | Sản phẩm | Xong khi |
 | --- | --- | --- | --- |
 | 1 | Tự cài PP1 theo `../pp1-dsfold/method.md` với bộ D | `src/token_reduction_vl/pruning/pp3_scorer/dsfold_base/` | **qua bài kiểm tra PP1 mục 13** |
-| 2 | Script tạo nhãn saliency (tuyến B): 50k GQA train, full token, 1 forward + 1 backward | `scripts/pp3/make_saliency_labels.py` → `data/features/pp3_scorer/saliency_gqa_train_50k.npz` | khoảng 6 giờ GPU |
+| 2a | Fit PCA cố định trên 1.000 mẫu train (`method.md` mục 2) | `scripts/pp3/fit_compressor.py` → `data/features/pp3_scorer/compressor.npz` | khoảng 5 phút GPU |
+| 2b | Script tạo nhãn saliency (tuyến B): 50k GQA train, full token, 1 forward + 1 backward | `scripts/pp3/make_saliency_labels.py` → shard `data/features/pp3_scorer/saliency_gqa_train_50k_*.npz` | khoảng 6 giờ GPU; chia việc bằng `--start/--end` |
 | 3 | Cài 3 kiến trúc 3a, 3b, 3c và loss ListNet | `src/token_reduction_vl/pruning/pp3_scorer/models.py`, `train.py` | unit test trên tensor giả |
 | 4 | Huấn luyện 3a, rồi 3b và 3c (không cần VLM) | `outputs/pp3_scorer/checkpoints/` (không lên Git) + `outputs/pp3_scorer/training/` | recall@K ≥ `quality` thủ công trên GQA val |
 | 5 | Ghép score head vào PP1 (thay S1), chạy dev subset 7 mức | `configs/methods/pp3_scorer.yaml` | so sánh được với PP1 bộ D ở cùng r |

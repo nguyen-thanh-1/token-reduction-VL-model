@@ -1,0 +1,23 @@
+{
+  "run_id": "test10_D_L3_mmb",
+  "method": "pp3_scorer",
+  "variant": "default",
+  "level": "L3",
+  "source": "mmb_validation",
+  "split": "C:\\Users\\Admin\\AppData\\Local\\Temp\\claude\\C--Users-Admin-Desktop-token-reduction-VL-model\\43c0ebc0-6e49-40fd-a62f-2f8b713f55ab\\scratchpad\\test10\\mmb.txt",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_dsfold_D.yaml",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-10-31T14:21:45+00:00",
+  "finished_at": "2026-10-31T14:21:48+00:00",
+  "rows": 10,
+  "errors": 0,
+  "git_sha": "8c3b13bd3c635b55819f20ee80cf648450bf8bed",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

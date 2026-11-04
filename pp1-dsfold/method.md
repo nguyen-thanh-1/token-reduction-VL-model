@@ -130,7 +130,7 @@ Các tầng DeepStack đi qua **merger khác nhau**, nên trước khi so sánh,
 
 ```
 μ_l = mean_i f_l[i]  ∈ R^2048                    # trung bình theo token của ảnh này
-σ_l = std của mọi phần tử (f_l − μ_l)            # một số vô hướng cho mỗi tầng
+σ_l = std tổng thể của mọi phần tử (f_l − μ_l)   # một số vô hướng cho mỗi tầng, chia cho số phần tử (không phải N−1)
 f̂_l = (f_l − μ_l) / (σ_l + 1e-6)
 ```
 
@@ -148,7 +148,7 @@ báo cáo đó là một kết quả âm.
 ### 3.4 Gộp thành điểm chất lượng
 
 ```
-z(x)_i    = clip( (x_i − mean(x)) / (std(x) + 1e-6), −3, 3 )      # z-score trong ảnh
+z(x)_i    = clip( (x_i − mean(x)) / (std(x) + 1e-6), −3, 3 )      # z-score trong ảnh, std tổng thể (chia cho N)
 quality_i = exp( α · z(rel)_i + β · z(ms)_i )                     # luôn > 0
 ```
 

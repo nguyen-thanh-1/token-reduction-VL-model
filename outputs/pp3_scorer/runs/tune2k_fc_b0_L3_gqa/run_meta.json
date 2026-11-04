@@ -1,0 +1,23 @@
+{
+  "run_id": "tune2k_fc_b0_L3_gqa",
+  "method": "pp3_scorer",
+  "variant": "fc_b0",
+  "level": "L3",
+  "source": "gqa_val_balanced",
+  "split": "C:\\Users\\Admin\\Desktop\\token-reduction-VL-model\\configs\\splits\\gqa_val_tune_2k.txt",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_fc.yaml (fc_b0_L3; scripts/pp3/run_diagnostics.py; --fc beta=0)",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": "outputs/pp3_scorer/checkpoints/score_head_3d_attn50k_seed0.pt",
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-02T09:17:32+00:00",
+  "finished_at": "2026-11-02T09:26:29+00:00",
+  "rows": 2000,
+  "errors": 0,
+  "git_sha": "398f74266b6963323d68b1ffed3e41e5e1c858ad",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

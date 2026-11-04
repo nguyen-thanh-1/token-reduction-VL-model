@@ -1,0 +1,23 @@
+{
+  "run_id": "oracle_denoise_tune1k",
+  "method": "pp3_scorer",
+  "variant": "oracle_denoise",
+  "level": "oracle",
+  "source": "gqa_val_balanced",
+  "split": "C:\\Users\\Admin\\Desktop\\token-reduction-VL-model\\configs\\splits\\gqa_val_tune_2k.txt",
+  "limit": 1000,
+  "config": "scripts/pp3/oracle_denoise.py fractions=[0.05, 0.1, 0.25] no fold",
+  "dsfold_params": null,
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-01T00:39:57+00:00",
+  "finished_at": "2026-11-01T00:50:24+00:00",
+  "rows": 1000,
+  "errors": 0,
+  "git_sha": "398f74266b6963323d68b1ffed3e41e5e1c858ad",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

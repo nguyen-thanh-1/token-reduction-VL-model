@@ -1,0 +1,11 @@
+# test10 seed=0, disjoint from dev_1k
+mme:test:landmark/05685b1070b828f5.jpg:00001236
+mme:test:landmark/05685b1070b828f5.jpg:00001237
+mme:test:landmark/0e04b4f7f9801ea9.jpg:00001292
+mme:test:landmark/0e04b4f7f9801ea9.jpg:00001293
+mme:test:artwork/18722.jpg:00000194
+mme:test:artwork/18722.jpg:00000195
+mme:test:commonsense_reasoning/0014.png:00000990
+mme:test:commonsense_reasoning/0014.png:00000991
+mme:test:posters/tt1300851.jpg:00002276
+mme:test:posters/tt1300851.jpg:00002277

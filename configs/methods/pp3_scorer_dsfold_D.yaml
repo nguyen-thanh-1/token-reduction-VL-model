@@ -1,0 +1,6 @@
+# PP3 reference run: PP3's own DSFold copy with parameter set D and the
+# hand-crafted quality score (no score head). PP3 must beat this at the same ratio.
+method: pp3_scorer
+factory: token_reduction_vl.pruning.pp3_scorer.factory:build_pruner
+dsfold_params: configs/dsfold_D-1.0.yaml
+checkpoint: null

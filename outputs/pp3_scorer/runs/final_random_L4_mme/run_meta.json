@@ -1,0 +1,23 @@
+{
+  "run_id": "final_random_L4_mme",
+  "method": "pp3_scorer",
+  "variant": "random",
+  "level": "L4",
+  "source": "mme_test",
+  "split": "all",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_attn50k.yaml (random_L4; scripts/pp3/run_diagnostics.py)",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-03T13:56:12+00:00",
+  "finished_at": "2026-11-03T14:20:23+00:00",
+  "rows": 2374,
+  "errors": 0,
+  "git_sha": "398f74266b6963323d68b1ffed3e41e5e1c858ad",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

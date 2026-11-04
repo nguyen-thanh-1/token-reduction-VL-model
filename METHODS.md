@@ -188,20 +188,23 @@ src/token_reduction_vl/
 │
 └── evaluation/
     ├── metrics.py  runner.py      (có sẵn)
-    ├── agreement.py               ← CHUNG: chỉ số agree (00-common mục 8.2)
-    ├── bootstrap.py               ← CHUNG: paired cluster bootstrap (mục 8.4)
-    ├── timing.py                  ← CHUNG: đo ViT / bộ chọn / prefill / decode
+    ├── bootstrap.py               ← CHUNG: paired cluster bootstrap (mục 8.4) — chưa có
     └── run_meta.py                ← CHUNG: ghi run_meta.json (mục 9.2)
 
+reporting/pruning_report.py        ← CHUNG: so với baseline trên cùng sample id (agree, r̄, thời gian,
+                                     MME theo kích thước), bảng + biểu đồ, vẽ token được giữ lên ảnh
+pruning/conformance.py             ← CHUNG: định dạng fixture của bài kiểm tra PP1
+
 scripts/
-├── common/   run_pruned.py  run_controls.py  make_splits.py  make_conformance_fixtures.py
+├── common/   make_splits.py  run_pruned.py (resume)  verify_noop.py  make_conformance_fixtures.py
+│             summarize_runs.py (bảng + biểu đồ)  visualize_kept_tokens.py (token được giữ trên ảnh)
 ├── pp1/      tune_dsfold.py
 ├── pp2/      make_budget_labels.py  train_budget_head.py  pick_thresholds.py
-├── pp3/      make_saliency_labels.py  train_score_head.py
-└── pp4/      spike_attention_bias.py  make_teacher_logits.py  train_gates.py
+├── pp3/      fit_compressor.py  make_saliency_labels.py (resume)  train_score_head.py (--resume)  plot_training.py
+└── pp4/      spike_attention_bias.py  make_teacher_logits.py (resume)  train_gates.py (--resume)  plot_training.py
 
 tests/
-├── common/   test_wrapper_noop.py  test_bootstrap.py  test_interface.py
+├── common/   test_pruning_interface.py  test_pruned_wrapper_helpers.py  test_pruned_wrapper_tiny_model.py  test_pruning_report.py
 ├── test_pp1_conformance.py        ← CHUNG: chạy cho cả 4 bản PP1 (pp1_dsfold + 3 dsfold_base)
 ├── pp1/  pp2/  pp3/  pp4/         ← unit test riêng (tensor giả, không cần model)
 └── fixtures/pp1_conformance/reference.json   (kết quả tham chiếu, nhỏ, theo dõi bằng git)

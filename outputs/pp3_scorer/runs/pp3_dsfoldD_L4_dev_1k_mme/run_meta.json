@@ -1,0 +1,23 @@
+{
+  "run_id": "pp3_dsfoldD_L4_dev_1k_mme",
+  "method": "pp3_scorer",
+  "variant": "dsfold_D",
+  "level": "L4",
+  "source": "mme_test",
+  "split": "configs\\splits\\dev_1k_mme.txt",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_dsfold_D.yaml",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-10-31T10:43:16+00:00",
+  "finished_at": "2026-10-31T11:12:24+00:00",
+  "rows": 1000,
+  "errors": 0,
+  "git_sha": "fe7ee1166a852b44aea3f710bf3b5c1d6f2c4367",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

@@ -89,7 +89,8 @@ class PrunerInput:
     v: Tensor                  # [N, 2048]  main visual embeddings
     deepstack: list[Tensor]    # 3 × [N, 2048]  f₁, f₂, f₃
     grid_hw: tuple[int, int]   # (H′, W′); token j nằm ở (j // W′, j % W′)
-    question_ids: Tensor       # [N_q] token id của câu hỏi + lựa chọn (định nghĩa ở PP1 mục 3.1)
+    question_ids: Tensor       # [N_q] token id của câu hỏi + lựa chọn (định nghĩa ở PP1 mục 3.1), CHƯA lọc stopword
+    question_tokens: tuple[str, ...]  # chuỗi giải mã của từng id, để PP1 lọc stopword
     embed_tokens: nn.Embedding # bảng embedding của LLM (chỉ đọc)
     ratio: float | None        # r cố định (PP1, PP3); None nếu phương pháp tự chọn K (PP2, PP4)
 

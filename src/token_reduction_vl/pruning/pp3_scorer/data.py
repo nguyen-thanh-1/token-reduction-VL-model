@@ -1,0 +1,198 @@
+"""Sharded storage of route-B training samples under ``data/features/pp3_scorer/``.
+
+One shard holds up to ``shard_size`` samples. Variable-length per-token arrays
+are concatenated and indexed by ``offsets`` (tokens) and ``q_offsets`` (question).
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from collections import defaultdict
+from collections.abc import Iterator
+from dataclasses import dataclass, replace
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch import Tensor
+
+from .features import TokenFeatures, fourier_positions
+
+
+@dataclass(frozen=True)
+class SaliencyRecord:
+    sample_id: str
+    image_id: str
+    grid_hw: tuple[int, int]
+    v: np.ndarray  # [N, Dv] fp16 (compressed)
+    f: np.ndarray  # [3, N, Df] fp16 (compressed)
+    z_rel: np.ndarray  # [N]
+    z_ms: np.ndarray  # [N]
+    q: np.ndarray  # [N_q, Dq] fp16 (compressed)
+    saliency: np.ndarray  # [N]
+    saliency_q: np.ndarray | None = None  # [N] second target (attention teacher's question rows, ADR 0003)
+
+    def features(self, log_ratio: float, device: torch.device | str = "cpu") -> TokenFeatures:
+        n = int(self.v.shape[0])
+        as_tensor = lambda array: torch.from_numpy(np.asarray(array, dtype=np.float32)).to(device)  # noqa: E731
+        return TokenFeatures(
+            v=as_tensor(self.v),
+            f=[as_tensor(level) for level in self.f],
+            z_rel=as_tensor(self.z_rel),
+            z_ms=as_tensor(self.z_ms),
+            positions=fourier_positions(n, self.grid_hw, torch.device(device)),
+            q=as_tensor(self.q),
+            grid_hw=self.grid_hw,
+            log_ratio=log_ratio,
+        )
+
+    def saliency_tensor(self, device: torch.device | str = "cpu") -> Tensor:
+        return torch.from_numpy(np.asarray(self.saliency, dtype=np.float32)).to(device)
+
+    def target_tensor(self, label: str = "primary", mix: float = 0.5, device: torch.device | str = "cpu") -> Tensor:
+        """Training target: ``primary`` (``saliency``), ``question`` (``saliency_q``) or their ``mix``."""
+
+        if label == "primary":
+            return self.saliency_tensor(device)
+        if self.saliency_q is None:
+            raise ValueError(f"Label {label!r} needs saliency_q, which this shard does not store.")
+        second = torch.from_numpy(np.asarray(self.saliency_q, dtype=np.float32)).to(device)
+        if label == "question":
+            return second
+        if label == "mix":
+            return (1 - mix) * self.saliency_tensor(device) + mix * second
+        raise ValueError(f"Unknown label {label!r}; choose primary, question or mix.")
+
+
+class ShardWriter:
+    def __init__(self, directory: Path, prefix: str, shard_size: int = 1000) -> None:
+        self.directory = directory
+        self.prefix = prefix
+        self.shard_size = shard_size
+        self.buffer: list[SaliencyRecord] = []
+        directory.mkdir(parents=True, exist_ok=True)
+        # Continue numbering after shards left by an interrupted run, never overwrite them.
+        self.shard_index = len(list(directory.glob(f"{prefix}_[0-9][0-9][0-9][0-9].npz")))
+
+    def add(self, record: SaliencyRecord) -> None:
+        self.buffer.append(record)
+        if len(self.buffer) >= self.shard_size:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self.buffer:
+            return
+        records = self.buffer
+        offsets = np.cumsum([0, *[r.v.shape[0] for r in records]])
+        q_offsets = np.cumsum([0, *[r.q.shape[0] for r in records]])
+        extra = {}
+        if all(r.saliency_q is not None for r in records):
+            extra["saliency_q"] = np.concatenate([r.saliency_q for r in records]).astype(np.float32)
+        np.savez(
+            self.directory / f"{self.prefix}_{self.shard_index:04d}.npz",
+            v=np.concatenate([r.v for r in records]).astype(np.float16),
+            f=np.concatenate([r.f for r in records], axis=1).astype(np.float16),
+            z_rel=np.concatenate([r.z_rel for r in records]).astype(np.float32),
+            z_ms=np.concatenate([r.z_ms for r in records]).astype(np.float32),
+            q=np.concatenate([r.q for r in records]).astype(np.float16),
+            saliency=np.concatenate([r.saliency for r in records]).astype(np.float32),
+            offsets=offsets,
+            q_offsets=q_offsets,
+            grid=np.array([r.grid_hw for r in records], dtype=np.int32),
+            meta=np.array(json.dumps([[r.sample_id, r.image_id] for r in records])),
+            **extra,
+        )
+        self.shard_index += 1
+        self.buffer = []
+
+
+def stored_sample_ids(directory: Path, prefix: str) -> set[str]:
+    """Ids already saved in any shard of ``prefix`` (reads only the small ``meta`` array)."""
+
+    done: set[str] = set()
+    for path in directory.glob(f"{prefix}_*.npz"):
+        with np.load(path) as data:
+            done.update(sample_id for sample_id, _ in json.loads(str(data["meta"])))
+    return done
+
+
+SHARD_ARRAYS = ("v", "f", "z_rel", "z_ms", "q", "saliency", "offsets", "q_offsets", "grid", "meta")
+
+
+def iter_shard(path: Path) -> Iterator[SaliencyRecord]:
+    # NpzFile re-reads the whole member on every ``data[key]`` access, so read each
+    # array once and copy the per-sample slices; otherwise every record keeps a
+    # view of a fresh full-shard array alive and memory explodes.
+    with np.load(path) as data:
+        arrays = {key: data[key] for key in SHARD_ARRAYS}
+        second = data["saliency_q"] if "saliency_q" in data.files else None
+    ids = json.loads(str(arrays["meta"]))
+    offsets, q_offsets, grid = arrays["offsets"], arrays["q_offsets"], arrays["grid"]
+    for index, (sample_id, image_id) in enumerate(ids):
+        start, end = int(offsets[index]), int(offsets[index + 1])
+        q_start, q_end = int(q_offsets[index]), int(q_offsets[index + 1])
+        yield SaliencyRecord(
+            sample_id=sample_id,
+            image_id=image_id,
+            grid_hw=(int(grid[index][0]), int(grid[index][1])),
+            v=arrays["v"][start:end].copy(),
+            f=arrays["f"][:, start:end].copy(),
+            z_rel=arrays["z_rel"][start:end].copy(),
+            z_ms=arrays["z_ms"][start:end].copy(),
+            q=arrays["q"][q_start:q_end].copy(),
+            saliency=arrays["saliency"][start:end].copy(),
+            saliency_q=None if second is None else second[start:end].copy(),
+        )
+
+
+def load_records(directory: Path, prefix: str, max_samples: int | None = None) -> list[SaliencyRecord]:
+    """Load shards into memory (≈ 170 KB per GQA sample; 50k samples ≈ 8–9 GB RAM)."""
+
+    records: list[SaliencyRecord] = []
+    for path in sorted(directory.glob(f"{prefix}_*.npz")):
+        for record in iter_shard(path):
+            records.append(record)
+            if max_samples is not None and len(records) >= max_samples:
+                return records
+    return records
+
+
+def contrastive_records(
+    records: list[SaliencyRecord], label: str = "mix", mix: float = 0.5, min_questions: int = 2
+) -> list[SaliencyRecord]:
+    """Question-specific targets (ADR 0004): ``t ∝ max(0, p − mean of p over the image's other questions)``.
+
+    Attention sinks get similar mass for every question on an image and cancel,
+    so what remains is the part of the teacher that depends on the question.
+    Images with fewer than ``min_questions`` samples, and samples with no
+    positive part, are dropped. The result stores ``t`` as ``saliency``.
+    """
+
+    by_image: dict[str, list[SaliencyRecord]] = defaultdict(list)
+    for record in records:
+        by_image[record.image_id].append(record)
+    result = []
+    for group in by_image.values():
+        targets = [record.target_tensor(label, mix) for record in group]
+        if len(group) < min_questions or len({t.numel() for t in targets}) != 1:
+            continue
+        stack = torch.stack([t / t.sum().clamp_min(1e-12) for t in targets])
+        total = stack.sum(0)
+        for record, p in zip(group, stack, strict=True):
+            contrast = (p - (total - p) / (len(group) - 1)).clamp_min(0)
+            if float(contrast.sum()) > 0:
+                result.append(replace(record, saliency=(contrast / contrast.sum()).numpy(), saliency_q=None))
+    return result
+
+
+def split_by_image(records: list[SaliencyRecord], holdout_fraction: float, seed: int) -> tuple[list[int], list[int]]:
+    """Indices for train / early-stop with no image on both sides."""
+
+    images = sorted({record.image_id for record in records})
+    generator = np.random.default_rng(seed)
+    generator.shuffle(images)
+    holdout = set(images[: max(1, math.ceil(holdout_fraction * len(images)))])
+    train = [i for i, record in enumerate(records) if record.image_id not in holdout]
+    early_stop = [i for i, record in enumerate(records) if record.image_id in holdout]
+    return train, early_stop
