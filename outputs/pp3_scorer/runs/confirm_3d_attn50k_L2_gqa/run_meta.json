@@ -1,0 +1,23 @@
+{
+  "run_id": "confirm_3d_attn50k_L2_gqa",
+  "method": "pp3_scorer",
+  "variant": "3d_attn50k",
+  "level": "L2",
+  "source": "gqa_val_balanced",
+  "split": "configs/splits/gqa_val_confirm.txt",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_attn50k.yaml (3d_attn50k_L2; scripts/pp3/run_diagnostics.py)",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": "outputs/pp3_scorer/checkpoints/score_head_3d_attn50k_seed0.pt",
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-03T05:32:08+00:00",
+  "finished_at": "2026-11-03T05:54:52+00:00",
+  "rows": 4890,
+  "errors": 0,
+  "git_sha": "398f74266b6963323d68b1ffed3e41e5e1c858ad",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

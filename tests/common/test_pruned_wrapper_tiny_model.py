@@ -75,7 +75,7 @@ def test_noop_wrapper_matches_generate(tiny_runner, sample) -> None:
 def test_pp3_pruning_and_saliency_run_end_to_end(tiny_runner, sample) -> None:
     from token_reduction_vl.models.qwen3_vl_pruned import question_text_for_scoring
     from token_reduction_vl.pruning.pp3_scorer import ScoredDSFoldPruner, build_score_head
-    from token_reduction_vl.pruning.pp3_scorer.saliency import gradient_x_input_saliency
+    from token_reduction_vl.pruning.pp3_scorer.saliency import gradient_x_input_saliency, signed_gradient_x_input
 
     image, prompt = sample
     text = question_text_for_scoring(prompt)
@@ -87,3 +87,85 @@ def test_pp3_pruning_and_saliency_run_end_to_end(tiny_runner, sample) -> None:
     saliency = gradient_x_input_saliency(tiny_runner, encoded, torch.tensor([100, 200]))
     assert saliency.shape == (70,)
     assert bool(torch.isfinite(saliency).all()) and bool((saliency > 0).any())
+
+    signed = signed_gradient_x_input(tiny_runner, encoded, torch.tensor([100, 200]))
+    assert signed.shape == (70,)
+    assert bool((signed.abs() <= saliency + 1e-5).all())
+
+
+def test_attention_teacher_reads_visual_attention(tiny_runner, sample) -> None:
+    from token_reduction_vl.models.qwen3_vl_pruned import question_text_for_scoring
+    from token_reduction_vl.pruning.pp3_scorer.attention_teacher import attention_teacher, question_positions
+
+    image, prompt = sample
+    encoded = tiny_runner.encode(image, prompt, question_text_for_scoring(prompt))
+    rows = question_positions(encoded.input_ids, encoded.image_positions, encoded.question_ids)
+    assert rows.numel() > 0
+    assert encoded.input_ids[0, rows].tolist() == encoded.question_ids.reshape(-1)[: rows.numel()].tolist()
+
+    previous = tiny_runner.language_model.config._attn_implementation
+    teacher = attention_teacher(tiny_runner, encoded, torch.tensor([100, 200]), layers=(1, 2))
+    assert tiny_runner.language_model.config._attn_implementation == previous
+    for target in (teacher.answer, teacher.question):
+        assert target.shape == (70,)
+        assert float(target.sum()) == pytest.approx(1.0, abs=1e-4)
+        assert bool((target >= 0).all())
+    assert teacher.question_rows == rows.numel()
+
+
+def test_fastv_pruner_ranks_by_layer_attention(tiny_runner, sample) -> None:
+    from token_reduction_vl.models.qwen3_vl_pruned import question_text_for_scoring
+    from token_reduction_vl.pruning.pp3_scorer.baselines import FastVPruner
+
+    image, prompt = sample
+    scoring_text = question_text_for_scoring(prompt)
+    encoded = tiny_runner.encode(image, prompt, scoring_text)
+    previous = tiny_runner.language_model.config._attn_implementation
+    pruner = FastVPruner()
+    pruner.prepare_sample(tiny_runner, encoded)
+    assert tiny_runner.language_model.config._attn_implementation == previous
+    assert pruner.attention.shape == (70,) and bool((pruner.attention >= 0).all())
+    result = tiny_runner.predict(image, prompt, scoring_text, pruner, 1 / 3, encoded=encoded)
+    expected = torch.sort(torch.topk(pruner.attention, result.num_kept).indices).values.tolist()
+    assert result.keep_indices == expected
+
+
+def test_received_attention_chunks_match_eager_weights(tiny_runner, sample) -> None:
+    from token_reduction_vl.models.qwen3_vl_pruned import question_text_for_scoring
+    from token_reduction_vl.pruning.base import PrunerOutput
+    from token_reduction_vl.pruning.pp3_scorer.baselines import FASTV_LAYER, received_attention
+
+    image, prompt = sample
+    encoded = tiny_runner.encode(image, prompt, question_text_for_scoring(prompt))
+    n = encoded.num_visual
+    prepared = tiny_runner.prepare(
+        encoded,
+        PrunerOutput(torch.arange(n), encoded.v, list(encoded.deepstack), {"K": n, "N": n}),
+    )
+    cols = encoded.image_positions
+    start = int(cols.min())
+    captured = []
+    lm = tiny_runner.language_model
+    previous = lm.config._attn_implementation
+    handle = lm.layers[FASTV_LAYER].self_attn.register_forward_hook(
+        lambda _m, _a, out: captured.append(out[1][0, :, start:, :].float().mean(0))
+    )
+    try:
+        lm.config._attn_implementation = "eager"
+        with torch.no_grad():
+            lm(
+                inputs_embeds=prepared.inputs_embeds,
+                position_ids=prepared.position_ids,
+                attention_mask=torch.ones(prepared.inputs_embeds.shape[:2], dtype=torch.long),
+                visual_pos_masks=prepared.visual_pos_masks,
+                deepstack_visual_embeds=prepared.deepstack,
+                use_cache=False,
+            )
+    finally:
+        lm.config._attn_implementation = previous
+        handle.remove()
+    rows = captured[0]
+    later = (torch.arange(start, start + rows.shape[0])[:, None] >= cols[None, :]).sum(0)
+    reference = rows[:, cols].sum(0) / later.clamp_min(1)
+    for chunk in (7, 512):
+        assert torch.allclose(received_attention(tiny_runner, encoded, chunk=chunk), reference, atol=1e-5)

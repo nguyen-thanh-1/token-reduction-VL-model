@@ -48,3 +48,22 @@ def test_top_score_pruner_drops_the_lowest_quality_tokens() -> None:
     assert set(dropped) == set(torch.topk(quality, 2, largest=False).indices.tolist())
     # gamma = 0: kept DeepStack features are passed through unchanged.
     assert torch.allclose(out.deepstack_kept[0], x.deepstack[0][out.keep_indices])
+
+
+def test_most_negative_only_drops_negative_entries() -> None:
+    from token_reduction_vl.pruning.pp3_scorer.diagnostics import complement, most_negative
+
+    saliency = torch.tensor([0.5, -2.0, 0.1, -0.1, -1.0, 3.0, 0.2, 0.3, 0.4, 0.6])
+    assert sorted(most_negative(saliency, 0.2).tolist()) == [1, 4]
+    assert sorted(most_negative(saliency, 0.9).tolist()) == [1, 3, 4]
+    assert most_negative(torch.ones(4), 0.5).numel() == 0
+    assert complement(5, torch.tensor([0, 3])).tolist() == [1, 2, 4]
+
+
+def test_keep_indices_pruner_returns_the_given_set() -> None:
+    from token_reduction_vl.pruning.pp3_scorer.diagnostics import KeepIndicesPruner
+
+    x = make_input(ratio=None)
+    out = KeepIndicesPruner(torch.tensor([7, 2, 11]), DSFoldParams().with_overrides(gamma=0.0)).select(x)
+    validate_output(x, out)
+    assert out.keep_indices.tolist() == [2, 7, 11]

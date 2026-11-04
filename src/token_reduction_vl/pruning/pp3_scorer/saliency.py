@@ -36,6 +36,20 @@ def gradient_x_input_saliency(runner: PrunedQwen3VL, encoded: EncodedSample, ans
     Only input gradients are computed; model weights stay frozen.
     """
 
+    return _gradient_x_input(runner, encoded, answer_ids, signed=False)
+
+
+def signed_gradient_x_input(runner: PrunedQwen3VL, encoded: EncodedSample, answer_ids: Tensor) -> Tensor:
+    """``s_i = ⟨∂log p/∂v_i, v_i⟩ + Σ_l ⟨∂log p/∂f_l[i], f_l[i]⟩`` without absolute values.
+
+    Zeroing token ``i`` changes ``log p`` by about ``−s_i``, so ``s_i < 0`` marks a
+    token that (to first order) works against ``answer_ids`` (ADR 0002, stage 3).
+    """
+
+    return _gradient_x_input(runner, encoded, answer_ids, signed=True)
+
+
+def _gradient_x_input(runner: PrunedQwen3VL, encoded: EncodedSample, answer_ids: Tensor, *, signed: bool) -> Tensor:
     if answer_ids.numel() == 0:
         raise ValueError("Saliency needs at least one answer token.")
     n = encoded.num_visual
@@ -52,7 +66,6 @@ def gradient_x_input_saliency(runner: PrunedQwen3VL, encoded: EncodedSample, ans
         logits = runner.teacher_forced_logits(prepared, answer_ids)
         log_prob = torch.log_softmax(logits, dim=-1).gather(1, answer_ids.view(-1, 1).to(logits.device)).sum()
         grads = torch.autograd.grad(log_prob, [v, *levels])
-    saliency = (grads[0].float() * v.float()).sum(dim=-1).abs()
-    for grad, level in zip(grads[1:], levels, strict=True):
-        saliency = saliency + (grad.float() * level.float()).sum(dim=-1).abs()
+    terms = [(grad.float() * value.float()).sum(dim=-1) for grad, value in zip(grads, [v, *levels], strict=True)]
+    saliency = sum(terms) if signed else sum(term.abs() for term in terms)
     return saliency.detach()

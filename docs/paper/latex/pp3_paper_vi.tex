@@ -1,0 +1,635 @@
+% PP3 paper, Vietnamese, IEEE conference format. Version 2 (2026-11-04), after the internal review.
+% Compile: XeLaTeX (recommended) or pdfLaTeX, then BibTeX, then twice more.
+%   latexmk -xelatex pp3_paper_vi.tex
+% Overleaf: upload this folder together with ../figures (or put the PNGs in
+% ./figures) and set the compiler to XeLaTeX.
+% \tbd marks numbers that come from runs still to be done (CDPruner on the test sets).
+\documentclass[conference]{IEEEtran}
+
+\usepackage{iftex}
+\ifXeTeX
+  \usepackage{fontspec}
+  \setmainfont{TeX Gyre Termes}
+  \usepackage{polyglossia}
+  \setdefaultlanguage{vietnamese}
+\else\ifLuaTeX
+  \usepackage{fontspec}
+  \setmainfont{TeX Gyre Termes}
+  \usepackage[vietnamese]{babel}
+\else
+  \usepackage[T5]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage[vietnamese]{babel}
+\fi\fi
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{cite}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+\graphicspath{{figures/}{../figures/}}
+\usepackage{placeins}            % FloatBarrier before the discussion, appendix and references
+\raggedbottom                    % no stretched gaps when a float moves to the next column
+\makeatletter                    % float-only pages start at the top, not centred
+\setlength{\@fptop}{0pt}\setlength{\@dblfptop}{0pt}
+\makeatother
+% Let LaTeX put more and larger floats on a page, so wide figures do not pile up at the end.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\dbltopfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.8}
+\renewcommand{\dblfloatpagefraction}{0.8}
+\setcounter{topnumber}{4}
+\setcounter{dbltopnumber}{4}
+\setcounter{totalnumber}{6}
+
+\newcommand{\mi}{\ensuremath{-}}            % minus sign in text and tables
+\newcommand{\pl}{\ensuremath{+}}
+\newcommand{\qhat}{\ensuremath{\hat{q}}}
+\newcommand{\best}[1]{\textbf{#1}}
+\newcommand{\ok}{\ensuremath{\checkmark}}
+\newcommand{\nok}{\ensuremath{\times}}
+\newcommand{\tbd}{\textcolor{red}{[chờ]}}
+\newcommand{\Hmlp}{H\textsubscript{MLP}}
+\newcommand{\Hattn}{H\textsubscript{Attn}}
+\newcommand{\Htg}{H\textsubscript{TG}}
+
+\begin{document}
+
+\title{PP3: Chọn token thị giác theo câu hỏi bằng bộ chấm điểm học từ attention cho mô hình thị giác--ngôn ngữ DeepStack}
+
+\author{
+\IEEEauthorblockN{Nguyễn Thiện Thanh, Nguyễn Trung Hiếu, Gia Bảo}
+\IEEEauthorblockA{Giảng viên hướng dẫn: Lê Phú Nguyên}
+}
+
+\maketitle
+
+\begin{abstract}
+Mô hình thị giác--ngôn ngữ (VLM) dành phần lớn chuỗi đầu vào cho token ảnh, trong khi một câu hỏi thường chỉ cần một phần nhỏ của ảnh. Các phương pháp chọn token có điều kiện theo câu hỏi trước LLM, như CDPruner, dùng một điểm liên quan thủ công (độ tương đồng cosine giữa token ảnh và câu lệnh) làm trọng số chất lượng của một quá trình điểm xác định (DPP). Chúng tôi đề xuất \textbf{PP3}, thay điểm thủ công đó bằng một \emph{score head} nhỏ (2 triệu tham số) được huấn luyện để dự đoán attention văn bản$\rightarrow$ảnh của chính LLM full-token, và xử lý cả ba luồng đặc trưng DeepStack của Qwen3-VL. Trên Qwen3-VL-2B, ở cùng số token, PP3 tốt hơn chọn ngẫu nhiên, DivPrune và FastV-style ở mọi mức budget trên GQA, MMBench và MME perception. Giữ 22\% token ảnh, PP3 đạt non-inferiority so với mô hình full trên GQA testdev (\mi0,50 điểm; cận dưới một phía \mi0,88, biên 1 điểm). Với 5,7\% token, PP3 mất 4,0 điểm trên GQA, so với 11,2 của DivPrune. Điểm yếu chính là các tác vụ phải đọc chữ: điểm MME cognition giảm từ 533,6 xuống 397,1 ở mức 22\%, và mọi phương pháp chọn token đều giảm tương tự. Chúng tôi cũng phân tích attention sink trong nhãn teacher và đề xuất một biến thể dễ diễn giải cho vùng focus theo câu hỏi.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mô hình thị giác--ngôn ngữ, cắt tỉa token ảnh, chưng cất attention, quá trình điểm xác định, Qwen3-VL, DeepStack
+\end{IEEEkeywords}
+
+% ======================================================================
+\section{Giới thiệu}
+\label{sec:intro}
+
+\subsection{Bối cảnh}
+Một VLM như Qwen3-VL~\cite{qwen2025qwen3vl} biến ảnh thành một dãy token rồi ghép với câu hỏi để LLM xử lý. Số token ảnh tăng theo độ phân giải. Với Qwen3-VL-2B, mỗi token ứng với một ô $32\times32$ pixel; ảnh GQA cho 64--1200 token, còn ảnh MME có thể lên tới 16\,320 token. Chi phí của LLM (tính toán ở bước prefill, bộ nhớ KV cache) tăng theo độ dài chuỗi, trong khi phần lớn câu hỏi chỉ liên quan tới một vài vùng nhỏ của ảnh.
+
+\subsection{Các hướng hiện có}
+Có ba hướng chính.
+\begin{itemize}
+\item \emph{Cắt token bên trong LLM} theo attention (FastV~\cite{chen2024fastv}, SparseVLM~\cite{zhang2025sparsevlm}, PyramidDrop~\cite{xing2025pyramiddrop}). Cách này cần trọng số attention tường minh, nên không dùng được FlashAttention, và vẫn chạy các lớp đầu với đủ token.
+\item \emph{Cắt token trước LLM, không phụ thuộc câu hỏi} (ToMe~\cite{bolya2023tome}, VisionZip~\cite{yang2025visionzip}, DivPrune~\cite{alvar2025divprune}). Mọi câu hỏi trên cùng một ảnh nhận cùng một tập token.
+\item \emph{Cắt token trước LLM, có điều kiện theo câu hỏi.} CDPruner~\cite{zhang2025cdpruner} là đại diện gần nhất với chúng tôi: nó nhân ma trận tương đồng giữa các token ảnh với điểm liên quan tới câu lệnh, rồi chọn tập con bằng DPP. Điểm liên quan là độ tương đồng cosine thủ công, không học.
+\end{itemize}
+
+\subsection{Ý tưởng chính}
+Điểm liên quan cosine chỉ đo token ảnh ``giống'' câu lệnh tới đâu trong không gian embedding, không đo LLM \emph{thực sự dùng} token nào để trả lời. Tín hiệu thứ hai có sẵn trong attention văn bản$\rightarrow$ảnh của LLM, nhưng đọc nó lúc suy luận vừa đắt vừa quá muộn. PP3 học trước một mạng nhỏ để \emph{dự đoán} bản đồ attention đó từ token ảnh và câu hỏi, rồi dùng dự đoán làm trọng số chất lượng cho DPP, trước khi LLM chạy.
+
+Qwen3-VL còn có DeepStack~\cite{meng2024deepstack}: ba mức đặc trưng trung gian của ViT được cộng vào hidden state ở lớp 0--2 của LLM tại vị trí token ảnh. Một bộ chọn token cho mô hình này phải giữ bốn luồng (luồng chính và ba mức DeepStack) nhất quán với nhau. Chúng tôi chưa thấy phương pháp cắt token nào đã công bố bàn tới trường hợp này, và mô tả một cách xử lý đơn giản (Mục~\ref{sec:fold}).
+
+\subsection{Đóng góp}
+\begin{enumerate}
+\item \textbf{Trọng số chất lượng học được cho DPP có điều kiện}, chưng cất từ attention văn bản$\rightarrow$ảnh của chính LLM. Trên tập phát triển, cùng một DPP với điểm thủ công (DSFold-D, cùng họ với CDPruner) mất 11,05 điểm ở budget 5,7\%; với score head học được chỉ mất 4,35 điểm (\pl6,70; $p<10^{-10}$).
+\item \textbf{Chọn token cho kiến trúc DeepStack}: giữ bốn luồng nhất quán, kèm bước gộp (fold) đặc trưng DeepStack của token bị bỏ. Fold trung tính trên GQA và được báo cáo như một ablation.
+\item \textbf{Phân tích} attention sink trong nhãn teacher, \textbf{chỉ số vùng} có định nghĩa hình thức (độ gọn, mức phụ thuộc câu hỏi), và một \textbf{nhãn tương phản} cho biến thể dễ diễn giải PP3-fc.
+\item \textbf{Quy trình đánh giá ghép cặp với non-inferiority} trên ba benchmark không gộp chung, với tập phát triển, tập xác nhận và tập test tách biệt.
+\end{enumerate}
+
+% ======================================================================
+\section{Công trình liên quan}
+\label{sec:related}
+
+\textbf{Cắt token bên trong LLM.} FastV~\cite{chen2024fastv} nhận thấy attention tới token ảnh giảm mạnh sau lớp 2 và cắt các token nhận attention thấp từ lớp đó. SparseVLM~\cite{zhang2025sparsevlm} dùng các token văn bản liên quan để chấm điểm token ảnh bên trong LLM. PyramidDrop~\cite{xing2025pyramiddrop} cắt dần theo từng giai đoạn.
+
+\textbf{Cắt và gộp token trước LLM.} ToMe~\cite{bolya2023tome} gộp các token giống nhau. LLaVA-PruMerge~\cite{shang2024prumerge} và VisionZip~\cite{yang2025visionzip} chọn token theo attention của token [CLS] trong bộ mã hóa ảnh; Qwen3-VL không có token này. DivPrune~\cite{alvar2025divprune} chọn tập đa dạng nhất theo tiêu chí max--min.
+
+\textbf{DPP có điều kiện.} DPP~\cite{kulesza2012dpp} cân bằng chất lượng và đa dạng của một tập con; MAP tham lam~\cite{chen2018fastmap} giải xấp xỉ trong $O(NK^2)$. CDPruner~\cite{zhang2025cdpruner} dùng kernel $\mathrm{diag}(\tilde r)\,S\,\mathrm{diag}(\tilde r)$, với $\tilde r$ là cosine giữa token ảnh và embedding trung bình của câu lệnh, chuẩn hóa min--max; phương pháp không cần huấn luyện. PP3 dùng cùng dạng kernel, nhưng thay $\tilde r$ bằng $\qhat$ do score head dự đoán. Phần so sánh với CDPruner vì vậy cho biết lợi ích đến từ trọng số học được hay chỉ từ DPP có điều kiện.
+
+\textbf{Attention sink.} Transformer dồn attention vào một số token ít mang thông tin~\cite{xiao2024sinks}, và ViT sinh ra các token ``register'' có chuẩn lớn ở nền ảnh~\cite{darcet2024registers}. Chúng tôi quan sát hiện tượng tương tự trong nhãn teacher (Mục~\ref{sec:fc}).
+
+\textbf{Mô hình và dữ liệu.} Qwen3-VL~\cite{qwen2025qwen3vl} dùng DeepStack~\cite{meng2024deepstack} và M-RoPE. Benchmark: GQA~\cite{hudson2019gqa}, MMBench~\cite{liu2024mmbench}, MME~\cite{fu2023mme}.
+
+% ======================================================================
+\section{Phương pháp}
+\label{sec:method}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_architecture.png}
+\caption{Kiến trúc và luồng xử lý của PP3. (A) Suy luận cho mỗi câu hỏi: Qwen3-VL đóng băng (xanh), đặc trưng và thuật toán không học (cam), score head học được (tím), chọn $K$ token bằng DPP, fold DeepStack, rồi LLM. (B) Huấn luyện score head bằng attention teacher (offline). (C) Biến thể PP3-fc.}
+\label{fig:arch}
+\end{figure*}
+
+\subsection{Bài toán và ký hiệu}
+\label{sec:setting}
+Sau ViT và PatchMerger, ảnh cho ra $N$ token $v_i\in\mathbb{R}^{2048}$ trên lưới $H'\times W'$, và ba mức đặc trưng DeepStack $f_i^{(l)}$, $l=1..3$ (lấy từ ViT lớp 5, 11, 17). Cho tỉ lệ danh nghĩa $r$, bộ chọn giữ $K=\lceil rN\rceil$ token. LLM nhận các $v$ giữ lại \emph{tại đúng vị trí M-RoPE gốc} $(t,h,w)$, và đặc trưng DeepStack của chúng. Toàn bộ Qwen3-VL đóng băng; chỉ score head được huấn luyện.
+
+Các mức budget dùng chung cho mọi phương pháp là $r\in\{1/18,\,1/9,\,2/9,\,1/3,\,1/2\}$, ký hiệu L1--L5. Vì lấy trần, tỉ lệ thực tế cao hơn danh nghĩa một chút; trên GQA testdev là 5,7\%, 11,3\%, 22,4\%, 33,4\% cho L1--L4. Bài báo dùng các tỉ lệ thực tế này.
+
+Ký hiệu: $\Lambda$ là kernel DPP, $T$ là độ dài chuỗi đầu vào của LLM, $\mathcal{L}$ là hàm mất mát; L1--L5 chỉ dùng để gọi tên mức budget.
+
+\subsection{S1 --- Đặc trưng token (không học)}
+\label{sec:features}
+\textbf{Điểm DSFold.} Hai điểm thủ công được tính cho mỗi token:
+\begin{itemize}
+\item Mức liên quan tới câu hỏi: $\mathrm{rel}_i=\max_{j}\cos(v_i,e_j)$, với $e_j$ là embedding (của LLM) của các từ trong câu hỏi và các lựa chọn, sau khi bỏ từ dừng.
+\item Mức khác biệt giữa các tầng DeepStack: $\mathrm{ms}_i=\|\hat f_i^{(3)}-\hat f_i^{(2)}\|+\|\hat f_i^{(2)}-\hat f_i^{(1)}\|$, với $\hat f^{(l)}$ là $f^{(l)}$ đã trừ trung bình theo token và chia độ lệch chuẩn của cả mức.
+\end{itemize}
+$z_\text{rel}$ và $z_\text{ms}$ là z-score của hai điểm này trong ảnh, cắt ở $\pm3$.
+
+\textbf{Vector đặc trưng.} Mỗi token được mô tả bằng $u_i\in\mathbb{R}^{467}$ (Bảng~\ref{tab:features}). Câu hỏi được nhúng bằng bảng embedding đóng băng của LLM rồi PCA $2048\rightarrow256$, cho $w\in\mathbb{R}^{N_q\times256}$. Các ma trận PCA được fit một lần trên 1000 ảnh train.
+
+\begin{table}[!htbp]
+\centering
+\caption{Vector đặc trưng $u_i$ của mỗi token ảnh}
+\label{tab:features}
+\begin{tabular}{@{}llr@{}}
+\toprule
+Thành phần & Cách tính & Chiều\\
+\midrule
+Nội dung $v$ & PCA cố định $2048\rightarrow256$, Linear & 256\\
+3 mức DeepStack & PCA $2048\rightarrow64$, Linear, mỗi mức & 192\\
+Điểm DSFold & $z_\text{rel}$, $z_\text{ms}$ & 2\\
+Vị trí & Fourier của tọa độ ô lưới & 16\\
+Budget & $\log r$ & 1\\
+\midrule
+\multicolumn{2}{@{}l}{Tổng} & 467\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Vì sao có $\log r$?} Thứ hạng của một token có thể phụ thuộc budget. Khi $K$ rất nhỏ, chỉ token của đối tượng chính đáng giữ; khi $K$ lớn hơn, token ngữ cảnh cũng có ích. Đặc trưng này cho phép head điều chỉnh điểm theo budget. Chúng tôi chưa làm ablation bỏ đặc trưng này.
+
+\subsection{S2 --- Score head (học)}
+\label{sec:head}
+Ba kiến trúc được so sánh; cả ba dùng chung bộ mã hóa ở Bảng~\ref{tab:features} (các phép chiếu Linear của $v$, DeepStack và câu hỏi):
+\begin{itemize}
+\item \textbf{\Hmlp} (777\,409 tham số): một MLP cho từng token trên $[u_i;\,\bar w;\,P_v v_i\odot\bar w]$ (979 chiều), với $\bar w$ là trung bình các từ câu hỏi.
+\item \textbf{\Hattn} (1\,318\,081 tham số): Linear $467\rightarrow256$, self-attention giữa các token ảnh, cross-attention từ token ảnh tới các từ câu hỏi, FFN, rồi Linear ra điểm.
+\item \textbf{\Htg} (1\,993\,153 tham số, \emph{dùng trong PP3}): \Hattn{} cộng hai thành phần.
+\end{itemize}
+
+Hai thành phần thêm vào của \Htg{} là:
+\begin{enumerate}
+\item Mã hóa câu hỏi: cộng embedding vị trí từ (tối đa 64 từ), qua một lớp Transformer encoder (4 head, FFN 512). Kết quả $\tilde w$ thay cho $w$ trong cross-attention.
+\item Điểm khớp từ $b_i=\operatorname{logsumexp}_{j}\langle W_k h_i, W_q\tilde w_j\rangle/\sqrt{256}$, tức mức token khớp với từ phù hợp nhất. Điểm cuối là $s_i=a_i+b_i$, với $a_i=\mathrm{Linear}(h_i)$.
+\end{enumerate}
+
+Câu hỏi dài hơn 64 token bị cắt trong head; điều này xảy ra ở khoảng 17\% câu MMBench (có kèm các lựa chọn), còn $z_\text{rel}$ vẫn dùng toàn bộ câu hỏi. Chất lượng đưa vào DPP là $\qhat_i=\mathrm{softplus}(s_i)+10^{-3}>0$. Chi tiết từng khối ở Phụ lục~\ref{app:head}.
+
+\subsection{Nhãn huấn luyện: attention teacher}
+\label{sec:teacher}
+\textbf{Bước 1 --- chạy mô hình full.} Mỗi câu hỏi huấn luyện được trả lời bằng Qwen3-VL đủ token (greedy). Mô hình được chạy lại ở chế độ teacher-forced trên chính câu trả lời đó, với LLM dùng attention \emph{eager} trong lượt này để lấy trọng số.
+
+\textbf{Bước 2 --- đọc attention.} Ở mỗi lớp $\ell\in\{8,\dots,19\}$ (trong 28 lớp), attention $A^{(\ell)}\in\mathbb{R}^{16\times T\times T}$ được cắt lấy hai nhóm hàng (vị trí dự đoán câu trả lời và vị trí các từ câu hỏi) và $N$ cột (vị trí token ảnh). Mỗi hàng được chuẩn hóa lại trên $N$ cột, rồi lấy trung bình theo head, theo lớp và theo hàng, cho hai phân phối $p_\text{ans}$ và $p_q$ trên $N$ token.
+
+\textbf{Bước 3 --- nhãn và hàm mất mát.}
+\begin{equation}
+p = 0{,}5\,p_\text{ans} + 0{,}5\,p_q,\qquad \mathcal{L}=\mathrm{CE}\big(p,\ \mathrm{softmax}(s)\big).
+\end{equation}
+
+Các lựa chọn lớp 8--19 và trọng số 0,5/0,5 được cố định trong giai đoạn phát triển trên GQA val và không tinh chỉnh trên tập test; chúng tôi chưa có ablation riêng cho hai lựa chọn này.
+
+\textbf{Cấu hình huấn luyện.} 50\,000 câu GQA train balanced; AdamW, lr $3\cdot10^{-4}$ với cosine schedule, weight decay 0,01; batch 16, tối đa 20 epoch, early stopping với patience 3. Đánh giá dừng sớm trên 10\% số \emph{ảnh} train được để riêng. Trên phần để riêng này, ở mức L3, \Htg{} đạt recall top-$K$ so với teacher là 0,836. Cùng thước đo, điểm thủ công $z_\text{rel}+0{,}5\,z_\text{ms}$ chỉ đạt 0,304.
+
+\textbf{Nhãn thay thế.} Nhãn saliency gradient$\times$input cần một lượt backward cho mỗi mẫu. Chúng được huấn luyện với hàm mất mát ListNet~\cite{cao2007listnet}. Vì head bắt chước mô hình full, trần kỳ vọng của PP3 là ngang mô hình full.
+
+\subsection{S3 --- DPP và S4 --- fold DeepStack}
+\label{sec:fold}
+Kernel DPP là
+\begin{equation}
+\Lambda=\mathrm{diag}(\qhat)\,S\,\mathrm{diag}(\qhat),\qquad S_{ij}=\cos(v_i,v_j).
+\end{equation}
+MAP tham lam~\cite{chen2018fastmap} mỗi bước thêm token làm $\log\det\Lambda_\text{chọn}$ tăng nhiều nhất. Khi $N>4096$, ma trận $N\times K$ của phân rã Cholesky quá lớn với GPU 16~GB. Khi đó, chúng tôi thay DPP bằng max--min có trọng số: $j=\arg\max_i \qhat_i\cdot\min_{s\in\text{chọn}}(1-S_{is})$. Trường hợp này xảy ra ở 264 trên 2374 câu MME (11\%) và áp dụng như nhau cho PP3, DSFold-D và CDPruner.
+
+Mỗi token bị bỏ $d$ được gán cho token giữ lại
+\begin{equation}
+a(d)=\arg\max_k\big[\cos(v_d,v_k)-\lambda\,\|g_d-g_k\|/D\big],
+\end{equation}
+với $g$ là tọa độ ô lưới và $D=\sqrt{H'^2+W'^2}$ là đường chéo lưới tính theo ô. Gọi $A(k)$ là tập token bị bỏ được gán cho $k$. Với mỗi mức DeepStack,
+\begin{equation}
+\tilde f_k=f_k+\gamma\!\!\sum_{d\in A(k)}\!\! w_{dk}f_d,\quad f'_k=\tilde f_k\,\frac{\|f_k\|}{\|\tilde f_k\|},
+\end{equation}
+với $w_{dk}=\mathrm{softmax}_{d\in A(k)}\big(\cos(v_d,v_k)/\tau\big)$. Token có $A(k)$ rỗng giữ nguyên $f_k$, và luồng chính $v$ không bị thay đổi. Tham số $\lambda=0{,}5$, $\gamma=0{,}5$, $\tau=0{,}1$ là bộ D-1.0, được cố định từ trước khi phát triển PP3 và không tinh chỉnh lại.
+
+\textbf{DSFold-D} là toàn bộ đường đi trên nhưng không có score head: DPP dùng chất lượng thủ công $q_i=\exp(z_{\text{rel},i}+0{,}5\,z_{\text{ms},i})$. Đây là một DPP có điều kiện không học, cùng họ với CDPruner.
+
+\subsection{Biến thể dễ diễn giải PP3-fc}
+\label{sec:fc}
+\textbf{Attention sink.} Teacher, và cả head bắt chước nó, dồn nhiều attention vào token nền cho mọi câu hỏi trên cùng ảnh. Tập giữ lại của các câu hỏi khác nhau trên cùng ảnh vì thế trùng nhau nhiều: Jaccard 0,65 ở L3, so với 0,13 khi chọn ngẫu nhiên (Mục~\ref{sec:region}).
+
+\textbf{Nhãn tương phản.} Với một câu hỏi trên ảnh có các câu hỏi khác,
+\begin{equation}
+t\propto\max\big(0,\ p-\overline{p}_{\text{câu hỏi khác cùng ảnh}}\big),
+\end{equation}
+nhãn này bỏ phần chung của ảnh và giữ phần riêng của câu hỏi; 98,6\% mẫu huấn luyện có câu hỏi ``anh em'' như vậy. Một \Htg{} thứ hai được huấn luyện trên $t$. Ví dụ, với 4 token (trời, TV, remote, sàn), $p=(0{,}40;0{,}15;0{,}40;0{,}05)$ và trung bình các câu hỏi khác $(0{,}45;0{,}30;0{,}10;0{,}15)$, ta được $t=(0;0;1;0)$.
+
+\textbf{Chọn token.} Phần focus ($\rho=25\%$ của $K$) mọc vùng liên thông 8 hướng trên điểm tương phản đã chuẩn hóa z. Mỗi bước thưởng $\beta=1$ cho token kề vùng đã chọn. Phần context (75\% còn lại) do DPP chọn trên các token chưa chọn, dùng $\qhat$ của head chính. PP3-fc vì vậy cần hai head (khoảng 4 triệu tham số) và hai lượt chạy head mỗi câu.
+
+\subsection{Tương thích với attention nhanh}
+Đọc attention trong LLM (như FastV) cần ma trận $16\times T\times T$ ở lớp được đọc. Với ảnh MME 13\,862 token, ma trận này chiếm khoảng 6~GB ở bf16. Baseline FastV-style của chúng tôi phải được viết lại để tính theo khối hàng. PP3 chỉ cần attention lúc huấn luyện (offline, ảnh GQA nhỏ); lúc suy luận, LLM chạy với SDPA/FlashAttention trên $K$ token.
+
+% ======================================================================
+\section{Thiết lập thực nghiệm}
+\label{sec:setup}
+
+\textbf{Mô hình và phần cứng.} Qwen3-VL-2B-Instruct, bf16, greedy decoding, tối đa 32 token mới; một GPU NVIDIA GeForce RTX 5060 Ti 16~GB, CUDA 13.0, PyTorch 2.14.1, Transformers 5.19.0.
+
+\textbf{Dữ liệu} (Bảng~\ref{tab:data}). Chúng tôi dùng tập dev tiếng Anh của MMBench (trên Hugging Face lưu dưới tên ``validation''). GQA test và MMBench test không có nhãn công khai, nên không được dùng để báo cáo.
+
+\begin{table}[!htbp]
+\centering
+\caption{Vai trò dữ liệu}
+\label{tab:data}
+\begin{tabular}{@{}llr@{}}
+\toprule
+Vai trò & Tập & Số câu\\
+\midrule
+Huấn luyện head & GQA train balanced & 50\,000\\
+Phát triển & tune2k (GQA val balanced) & 2000\\
+Xác nhận & gqa\_val\_confirm (không trùng tune2k) & 4890\\
+Test & GQA testdev balanced & 12\,578\\
+Test & MMBench dev (EN) & 4329\\
+Test & MME test & 2374\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Prompt và chấm điểm.}
+\begin{itemize}
+\item \emph{GQA}: câu hỏi, cộng ``Answer with a short phrase.''; khớp chính xác sau chuẩn hóa (chữ thường, bỏ dấu câu và mạo từ).
+\item \emph{MMBench}: gợi ý (nếu có), câu hỏi, danh sách lựa chọn, cộng ``Answer with the option letter only.''. Đáp án là chữ cái được trích ra, hoặc khớp chính xác nội dung lựa chọn. Mỗi câu chấm một lần; chúng tôi không dùng CircularEval.
+\item \emph{MME}: câu hỏi, cộng ``Answer yes or no only.''; điểm mỗi tác vụ theo cách chấm chính thức (acc $+$ acc$+$, tối đa 200).
+\end{itemize}
+
+\textbf{Baseline} (cùng giao diện, cùng $K$):
+\begin{itemize}
+\item \emph{Ngẫu nhiên}: chọn đều ngẫu nhiên, có fold.
+\item \emph{DivPrune}~\cite{alvar2025divprune}: max--min đa dạng theo cosine trên $v$, không fold.
+\item \emph{FastV-style}~\cite{chen2024fastv}: top-$K$ theo attention mà mỗi token ảnh nhận được ở lớp 2 (chỉ số 1) của prefill full-token, không fold. Attention được trung bình theo head, và trung bình trên mọi vị trí đứng sau token ảnh đầu tiên (các token ảnh sau đó và token văn bản), có chuẩn hóa theo số hàng nhìn thấy cột đó do mặt nạ nhân quả. Tập chọn được đưa vào LLM ngay từ lớp 0; đây không phải FastV gốc, vốn cắt bên trong LLM sau lớp 2.
+\item \emph{CDPruner}~\cite{zhang2025cdpruner}: $\tilde r$ là cosine giữa $v_i$ và embedding trung bình của câu hỏi cùng các lựa chọn, chuẩn hóa min--max; DPP trên $\mathrm{diag}(\tilde r)\,S\,\mathrm{diag}(\tilde r)$, không fold. Phương pháp dùng chung bộ giải DPP với PP3, kể cả max--min khi $N>4096$. Đây là cài đặt của chúng tôi theo mô tả trong bài báo gốc.
+\end{itemize}
+Fold không đồng nhất giữa các baseline (ngẫu nhiên có fold, các baseline khác thì không, đúng như bản gốc). Vì fold trung tính trên GQA (Mục~\ref{sec:ablation}), ảnh hưởng của sự khác biệt này nhỏ.
+
+\textbf{Thống kê.}
+\begin{itemize}
+\item Mọi cấu hình được giải mã từ cùng một lượt ViT, và so sánh ghép cặp trên cùng câu hỏi.
+\item Với GQA và MMBench: hiệu số $d=(b-c)/n$ ($b$, $c$ là số câu chỉ đúng ở một bên), khoảng tin cậy Wald ghép cặp $d\pm1{,}96\,\mathrm{SE}$ với $\mathrm{SE}=\sqrt{((b+c)/n-d^2)/n}$, giá trị $p$ McNemar chính xác, và cận dưới một phía $d-1{,}645\,\mathrm{SE}$.
+\item \emph{Non-inferiority} với biên 1 điểm: cận dưới phải lớn hơn $-1$. Biên được chọn trước khi chạy tập test, và tương đương khoảng 1,5--2\% accuracy tương đối.
+\item Với MME: khoảng tin cậy 95\% bằng bootstrap theo ảnh (1000 lần lấy mẫu lại, giữ nguyên các cặp câu hỏi của mỗi ảnh để tính acc$+$).
+\item Chúng tôi không hiệu chỉnh cho nhiều phép so sánh. Các so sánh đối đầu chính đều có $p<0{,}001$ nên vẫn có ý nghĩa sau hiệu chỉnh Holm~\cite{holm1979}. Các kết luận non-inferiority dựa trên từng cận dưới riêng lẻ.
+\item Benchmark không bao giờ được lấy trung bình với nhau.
+\item Cấu hình được chọn trên tune2k, xác nhận trên gqa\_val\_confirm, rồi chạy một lần trên tập test.
+\end{itemize}
+
+% ======================================================================
+\section{Kết quả}
+\label{sec:results}
+
+\subsection{Kết quả chính trên tập test}
+
+\begin{table*}[!t]
+\centering
+\caption{Kết quả trên tập test (mức L1--L4; tỉ lệ token thực tế trên GQA). GQA và MMBench: chênh lệch accuracy so với full (điểm \%) kèm khoảng tin cậy 95\% ghép cặp. MME: điểm tuyệt đối (perception tối đa 2000, cognition tối đa 800). Chữ đậm: tốt nhất trong cùng mức. \tbd: CDPruner đang được chạy.}
+\label{tab:main}
+\small
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+Mức (\% token) & Phương pháp & GQA testdev & MMBench dev & MME perc. & MME cogn.\\
+\midrule
+100\% & Full & 59,18\% & 83,90\% & 1511,6 & 533,6\\
+\midrule
+\multirow{5}{*}{L1 (5,7\%)} & Ngẫu nhiên & \mi14,71 [\mi15,57; \mi13,85] & \mi16,26 [\mi17,55; \mi14,97] & 1174,4 & 294,3\\
+& DivPrune & \mi11,18 [\mi12,00; \mi10,36] & \mi11,67 [\mi12,83; \mi10,50] & 1250,2 & 289,3\\
+& FastV-style & \mi23,19 [\mi24,13; \mi22,25] & \mi24,86 [\mi26,32; \mi23,39] & 984,3 & 304,3\\
+& CDPruner & \tbd & \tbd & \tbd & \tbd\\
+& \textbf{PP3} & \best{\mi4,04} [\mi4,67; \mi3,41] & \best{\mi9,84} [\mi10,98; \mi8,70] & \best{1385,3} & \best{323,2}\\
+\midrule
+\multirow{5}{*}{L2 (11,3\%)} & Ngẫu nhiên & \mi9,75 [\mi10,52; \mi8,97] & \mi9,75 [\mi10,87; \mi8,62] & 1330,3 & 337,1\\
+& DivPrune & \mi5,97 [\mi6,67; \mi5,27] & \mi6,01 [\mi6,99; \mi5,02] & 1400,5 & 324,6\\
+& FastV-style & \mi15,63 [\mi16,51; \mi14,76] & \mi10,63 [\mi11,77; \mi9,48] & 1290,5 & 331,1\\
+& CDPruner & \tbd & \tbd & \tbd & \tbd\\
+& \textbf{PP3} & \best{\mi1,88} [\mi2,43; \mi1,34] & \best{\mi4,53} [\mi5,43; \mi3,63] & \best{1469,8} & \best{358,9}\\
+\midrule
+\multirow{5}{*}{L3 (22,4\%)} & Ngẫu nhiên & \mi5,44 [\mi6,11; \mi4,77] & \mi4,46 [\mi5,33; \mi3,58] & 1495,0 & 333,9\\
+& DivPrune & \mi2,58 [\mi3,16; \mi2,00] & \mi3,03 [\mi3,83; \mi2,22] & 1462,2 & 389,3\\
+& FastV-style & \mi8,48 [\mi9,22; \mi7,75] & \mi4,97 [\mi5,84; \mi4,10] & 1415,0 & \best{426,8}\\
+& CDPruner & \tbd & \tbd & \tbd & \tbd\\
+& \textbf{PP3} & \best{\mi0,50} [\mi0,96; \mi0,05] & \best{\mi1,71} [\mi2,40; \mi1,02] & \best{1502,4} & 397,1\\
+\midrule
+\multirow{5}{*}{L4 (33,4\%)} & Ngẫu nhiên & \mi3,16 [\mi3,75; \mi2,57] & \mi2,49 [\mi3,25; \mi1,74] & 1471,5 & 440,0\\
+& DivPrune & \mi1,39 [\mi1,90; \mi0,88] & \mi1,41 [\mi2,08; \mi0,73] & 1467,4 & 445,4\\
+& FastV-style & \mi4,53 [\mi5,14; \mi3,92] & \mi3,16 [\mi3,89; \mi2,44] & 1489,4 & \best{454,6}\\
+& CDPruner & \tbd & \tbd & \tbd & \tbd\\
+& \textbf{PP3} & \best{\mi0,10} [\mi0,48; \pl0,29] & \best{\mi0,97} [\mi1,58; \mi0,36] & \best{1517,6} & 453,9\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_budget_curves.png}
+\caption{Chất lượng theo tỉ lệ token giữ lại trên tập test. Dải xám: biên non-inferiority 1 điểm.}
+\label{fig:budget}
+\end{figure*}
+
+Từ Bảng~\ref{tab:main} và Hình~\ref{fig:budget}:
+\begin{enumerate}
+\item \textbf{GQA và MMBench}: PP3 tốt nhất ở mọi mức trong các baseline đã có. So với baseline tốt nhất (DivPrune) trên GQA, PP3 hơn \pl7,14 điểm ở L1, \pl4,09 ở L2, \pl2,08 ở L3 và \pl1,29 ở L4; khoảng cách tăng khi budget giảm.
+\item \textbf{Non-inferiority} (Bảng~\ref{tab:ni}): đạt trên GQA ở L3 và L4, không đạt trên MMBench ở mọi mức L1--L4.
+\item \textbf{MME perception}: PP3 cao nhất ở mọi mức. So với mô hình full, chênh lệch ở L3 là \mi9,2 [\mi58,1; \pl39,8] và ở L4 là \pl6,1 [\mi37,8; \pl49,1] (bootstrap theo ảnh), tức \emph{không thấp hơn có ý nghĩa thống kê}. Ngược lại, FastV-style ở L3 thấp hơn có ý nghĩa (\mi96,6 [\mi164,8; \mi24,9]).
+\item \textbf{MME cognition} giảm với mọi phương pháp. PP3 \emph{không} dẫn đầu ở đây: FastV-style cao hơn ở L3 và ngang ở L4. Chênh lệch của PP3 so với full là \mi136,4 [\mi196,3; \mi82,7] ở L3 và \mi79,6 [\mi124,8; \mi37,3] ở L4 (Mục~\ref{sec:mme}).
+\item Score head chỉ được huấn luyện trên GQA, nhưng vẫn dẫn đầu trên MMBench và MME perception.
+\end{enumerate}
+
+\begin{table}[!htbp]
+\centering
+\caption{Non-inferiority trên tập test: cận dưới một phía 95\% của hiệu số so với full (đạt nếu $>\mi1$)}
+\label{tab:ni}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& GQA testdev & MMBench dev\\
+\midrule
+PP3 L2 & \mi2,34 \nok & \mi5,28 \nok\\
+PP3 L3 & \mi0,88 \ok & \mi2,29 \nok\\
+PP3 L4 & \mi0,42 \ok & \mi1,48 \nok\\
+PP3-fc L5 (50\%) & \mi0,41 \ok & \mi0,62 \ok\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Mức L5.} Trên tập test, chỉ biến thể PP3-fc được chạy ở L5 (50\%). Kết quả: GQA \mi0,15 [\mi0,46; \pl0,16], MMBench \mi0,21 [\mi0,69; \pl0,28], MME perception 1533,7 (chênh \pl22,1 [\mi19,3; \pl59,6] so với full, không khác biệt có ý nghĩa), cognition 492,5 (\mi41,1 [\mi91,9; \pl5,3]). PP3 thường và các baseline không được chạy ở L5 trên tập test.
+
+\subsection{Phân tích MME theo tác vụ}
+\label{sec:mme}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_mme_subtasks.png}
+\caption{Điểm MME theo từng tác vụ (tối đa 200). Dấu $*$ đánh dấu tác vụ cognition.}
+\label{fig:mme}
+\end{figure}
+
+Phần điểm bị mất tập trung ở các tác vụ phải đọc chữ trong ảnh (Hình~\ref{fig:mme}). Từ full sang PP3 L3: code\_reasoning $108\rightarrow60$, text\_translation $185\rightarrow125$, numerical\_calculation $118\rightarrow95$, OCR $125\rightarrow118$. Chữ nhỏ trải trên nhiều token, nên bỏ token là mất ký tự; teacher lại học trên GQA, nơi câu hỏi chủ yếu về vật thể. Ở celebrity ($132\rightarrow144$) và position ($128\rightarrow143$), điểm của PP3 cao hơn full, nhưng với khoảng tin cậy ở trên, đây chưa phải là kết luận chắc chắn.
+
+Lưu ý về cỡ mẫu: ba tác vụ code\_reasoning, text\_translation và numerical\_calculation chỉ có 40 câu trên 20 ảnh mỗi tác vụ (commonsense\_reasoning có 140 câu trên 70 ảnh). Một ảnh sai đã làm lệch 10--20 điểm.
+
+\subsection{Kết quả phát triển và xác nhận (GQA val)}
+\label{sec:dev}
+
+\begin{table}[!htbp]
+\centering
+\caption{Chênh lệch so với full trên GQA val. tune2k: $n=2000$, full 68,90\%. confirm: $n=4890$, không trùng tune2k, full 69,55\%. LB: cận dưới một phía. ``--'': không chạy.}
+\label{tab:dev}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+& Ngẫu nhiên & DivPrune & FastV-st. & PP3 & LB PP3\\
+\midrule
+\multicolumn{6}{@{}l}{\emph{tune2k}}\\
+L1 & \mi20,10 & \mi16,55 & \mi30,40 & \best{\mi4,35} & \\
+L2 & \mi13,05 & \mi7,90 & \mi17,85 & \best{\mi1,20} & \\
+L3 & \mi6,95 & \mi3,35 & \mi7,70 & \best{\mi0,20} & \\
+L4 & \mi4,00 & \mi1,45 & \mi4,35 & \best{\mi0,20} & \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{gqa\_val\_confirm}}\\
+L1 & \mi18,69 & \mi14,46 & \mi29,08 & \best{\mi4,62} & \mi5,45\\
+L2 & -- & -- & -- & \mi1,62 & \mi2,30\\
+L3 & \mi5,81 & \mi3,11 & \mi7,03 & \best{\mi0,18} & \mi0,73 \ok\\
+L4 & -- & -- & -- & \pl0,04 & \mi0,43 \ok\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Trên tập xác nhận, cấu hình đã được chốt trước khi chấm, và baseline chỉ được chạy ở L1 và L3 (Bảng~\ref{tab:dev}). So sánh đối đầu (McNemar, cùng câu hỏi), PP3 hơn DivPrune \pl9,84 [\pl8,55; \pl11,12] ở L1 và \pl2,92 [\pl2,09; \pl3,76] ở L3, hơn FastV-style \pl6,85 [\pl5,76; \pl7,94] ở L3, tất cả với $p<0{,}001$. Ở các mức có đủ số liệu, ba tập (tune2k, confirm, testdev) cho cùng thứ hạng.
+
+\subsection{Ablation}
+\label{sec:ablation}
+
+\begin{table}[!htbp]
+\centering
+\caption{Ablation trên tune2k (chênh lệch so với full, điểm \%). ``grad'': nhãn saliency gradient; ``teacher'': nhãn attention. Số trong ngoặc là số nhãn huấn luyện.}
+\label{tab:ablation}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Cấu hình & L1 & L2 & L3 & L4\\
+\midrule
+Ngẫu nhiên (có fold) & \mi20,10 & \mi13,05 & \mi6,95 & \mi4,00\\
+DivPrune & \mi16,55 & \mi7,90 & \mi3,35 & \mi1,45\\
+DSFold-D: DPP, điểm thủ công & \mi11,05 & \mi6,05 & \mi3,25 & \mi0,95\\
+\midrule
+\Hmlp, grad (10k) & & & \mi1,95 & \mi0,45\\
+\Hmlp, grad (50k) & \mi3,15 & \mi1,60 & \mi0,50 & \mi0,40\\
+\Hattn, grad (50k) & & & \mi1,00 & \mi0,70\\
+\Htg, teacher (10k) & & & \mi0,25 & \mi0,20\\
+\textbf{\Htg, teacher (50k) = PP3} & \mi4,35 & \mi1,20 & \mi0,20 & \mi0,20\\
+PP3 không fold ($\gamma=0$) & & \mi1,25 & \mi0,25 & \pl0,15\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_ablation.png}
+\caption{Ablation trên tune2k (chênh lệch so với full, điểm \%).}
+\label{fig:ablation}
+\end{figure}
+
+Từ Bảng~\ref{tab:ablation} và Hình~\ref{fig:ablation}:
+\begin{itemize}
+\item \textbf{Trọng số học được là bước tiến lớn nhất.} Cùng DPP và fold, thay điểm thủ công (DSFold-D) bằng PP3 tăng \pl6,70 [\pl4,74; \pl8,66] ở L1 và \pl3,05 [\pl1,70; \pl4,40] ở L3 (cả hai $p<10^{-4}$). DSFold-D là một DPP có điều kiện không học, cùng họ với CDPruner; kết quả này là bằng chứng đầu tiên rằng lợi ích đến từ head chứ không chỉ từ DPP có điều kiện.
+\item \textbf{DSFold-D so với DivPrune:} hơn ở L1, L2, L4, và ngang ở L3 (\pl0,10; $p=0{,}95$).
+\item \textbf{Nguồn nhãn.} Với 10k nhãn, \Htg{} học từ teacher hơn \Hmlp{} học từ gradient \pl1,70 [\pl0,60; \pl2,80] ở L3 ($p=0{,}003$), nhưng chỉ \pl0,25 ở L4 ($p=0{,}68$). So sánh này đổi \emph{cả} nguồn nhãn \emph{lẫn} kiến trúc, nên không tách được hai yếu tố; chúng tôi không có \Htg{} học từ gradient. Với 50k nhãn, PP3 \emph{kém} \Hmlp-grad 1,20 điểm ở L1 ($p=0{,}15$, không có ý nghĩa) và hơn \pl0,40, \pl0,30, \pl0,20 ở L2--L4. Kết luận thận trọng: nhãn teacher không cần lượt backward và cho kết quả ít nhất tương đương, nhưng không vượt trội rõ ràng ở 50k nhãn.
+\item \textbf{Fold DeepStack} không tạo khác biệt đo được trên GQA.
+\end{itemize}
+
+\subsection{Trực quan hóa token được chọn}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_selection_examples.png}
+\caption{Token giữ lại (sáng) và bị bỏ (tối) ở budget 22\% trên GQA testdev. Tiêu chí chọn ví dụ: ba câu đầu tiên theo mã câu hỏi (mỗi ảnh một câu, không phải câu yes/no, $120\le N\le300$) mà mô hình full và PP3 trả lời đúng còn DivPrune và FastV-style trả lời sai.}
+\label{fig:examples}
+\end{figure*}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_selection_failures.png}
+\caption{Trường hợp PP3 sai: hai câu đầu tiên theo cùng tiêu chí, nhưng mô hình full và DivPrune trả lời đúng còn PP3 trả lời sai.}
+\label{fig:failures}
+\end{figure*}
+
+Ở Hình~\ref{fig:examples}, câu 1 (``Which kind of device does the boy play with?''): PP3 giữ cụm token ở tay và cái điều khiển nên trả lời ``wii controller'', còn các phương pháp khác chỉ nói được ``controller''. Câu 2: PP3 giữ các token ở cửa sổ và rèm, còn DivPrune rải token khắp phòng. FastV-style thường dồn token vào các vùng sáng đồng nhất (tường, gối).
+
+Hình~\ref{fig:failures} cho thấy hai kiểu lỗi.
+\begin{itemize}
+\item \emph{Thiếu chi tiết nhỏ}: PP3 giữ token ở khuôn mặt và áo cậu bé, nhưng bỏ phần lớn chiếc bánh trên đĩa, nên đoán ``pizza'' thay vì ``hamburger''.
+\item \emph{So sánh hai đối tượng}: với câu ``cái bàn hay cái giường không sạch'', PP3 tập trung vào giường mà bỏ mặt bàn. DivPrune, nhờ phủ đều, giữ được cả hai.
+\end{itemize}
+
+\subsection{Hình dạng vùng và mức phụ thuộc câu hỏi}
+\label{sec:region}
+
+\textbf{Định nghĩa.} Với tập giữ lại $S$ trên lưới $H'\times W'$:
+\begin{itemize}
+\item \emph{Số vùng trên 10 token} là $10\cdot C(S)/|S|$, với $C(S)$ là số thành phần liên thông 8 hướng của toàn bộ $S$ (không phải top-10).
+\item \emph{Mức trùng giữa câu hỏi} là trung bình Jaccard $|S_a\cap S_b|/|S_a\cup S_b|$ trên mọi cặp câu hỏi khác nhau của cùng một ảnh, rồi trung bình theo ảnh.
+\end{itemize}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_region.png}
+\caption{Trên: số vùng rời nhau trên 10 token giữ lại (thấp = gọn). Dưới: mức trùng Jaccard giữa các câu hỏi cùng ảnh (thấp = phụ thuộc câu hỏi). tune2k.}
+\label{fig:region}
+\end{figure}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_focus_questions.png}
+\caption{PP3-fc ở L5: cùng một ảnh, các câu hỏi khác nhau cho vùng focus (viền đỏ) khác nhau; phần sáng còn lại là context.}
+\label{fig:focus}
+\end{figure*}
+
+Từ Hình~\ref{fig:region}:
+\begin{itemize}
+\item PP3 gắn với ảnh nhiều hơn với câu hỏi: mức trùng 0,65 / 0,72 / 0,81 ở L3 / L4 / L5, gấp nhiều lần chọn ngẫu nhiên. Đây là dấu vết của attention sink mà head học từ teacher.
+\item So sánh công bằng phải cùng số token. Xét \emph{toàn tập} giữ lại, PP3-fc giảm mức trùng so với PP3: 0,61 so với 0,72 ở L4, và 0,72 so với 0,81 ở L5.
+\item \emph{Phần focus} của PP3-fc (8,5--12,5\% token) gọn (1,4--1,8 vùng trên 10 token) và trùng ít (0,15--0,18). Hai con số này đo trên một tập nhỏ hơn, nên không so trực tiếp được với PP3.
+\end{itemize}
+Độ chính xác không đổi: ở L5 trên tune2k, PP3-fc đạt 68,85\% so với 68,70\% của PP3. Hình~\ref{fig:focus} minh họa: câu về con vật té nước tập trung vào nước quanh con chó, câu về mặt nước tập trung vào mặt nước, câu về con chó tập trung vào thân con chó. Trên tune2k ở L4, tỉ lệ focus 0 / 25 / 40 / 55\% cho chênh lệch \mi0,20 / \mi0,35 / \mi0,60 / \mi1,05 điểm.
+
+\subsection{Câu hỏi có/không}
+Câu yes/no (566 trên 2000 câu của tune2k) vẫn thấp hơn full 0,7--1,8 điểm ở mọi budget tới 50\%, dù có hay không có fold. Lỗi chủ yếu là câu có đáp án ``no'' bị trả lời ``yes''. Ở L4: 14 câu ``no'' bị mất và 1 câu được thêm; 3 câu ``yes'' bị mất và 6 câu được thêm. Chọn ngẫu nhiên thì ngược lại, chủ yếu mất câu ``yes'' (24 câu). Một giả thuyết: khi chỉ giữ token quanh đối tượng được hỏi, mô hình thiếu bằng chứng để phủ định.
+
+\subsection{Hiệu năng}
+\label{sec:timing}
+
+Phép đo dùng một tiến trình riêng trên GPU, 300 câu mỗi tập: tune2k (GQA) và 300 câu đầu của MME test (code\_reasoning và artwork). Mẫu MME này có trung bình 877 token ảnh, ít hơn toàn bộ MME test (1756). Chúng tôi báo cáo trung vị và khoảng tứ phân vị (IQR).
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_timing.png}
+\caption{Thời gian mỗi câu: trung vị của từng bước (ViT, chọn token, prefill, decode). FastV-style không có trong hình vì lượt chạy thêm 2 lớp LLM của nó không nằm trong phần được đo.}
+\label{fig:timing}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Token ảnh $K$, token vào LLM (gồm cả khoảng 25--35 token văn bản), và thời gian chọn token + prefill + decode (ms, trung vị [IQR], không tính ViT)}
+\label{tab:timing}
+\setlength{\tabcolsep}{2.5pt}
+\footnotesize
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+& \multicolumn{2}{c}{GQA ($\bar N=224$)} & \multicolumn{2}{c}{MME, 300 câu ($\bar N=877$)}\\
+& $K$ / vào LLM & ms & $K$ / vào LLM & ms\\
+\midrule
+Full & 224 / 249 & 98,8 [83,7; 112,5] & 877 / 912 & 118,0 [106,5; 136,0]\\
+Ngẫu nhiên L3 & 50 / 76 & 54,8 [53,6; 57,6] & 195 / 230 & 57,2 [55,7; 61,7]\\
+DivPrune L3 & 50 / 76 & 59,4 [57,9; 67,3] & 195 / 230 & 79,7 [73,4; 91,8]\\
+PP3 L1 & 13 / 38 & 62,6 [60,8; 67,2] & 49 / 84 & 73,4 [70,1; 78,8]\\
+PP3 L3 & 50 / 76 & 101,9 [95,5; 110,9] & 195 / 230 & 118,0 [108,7; 141,0]\\
+PP3 L4 & 75 / 100 & 76,6 [73,2; 92,9] & 293 / 327 & 150,8 [130,3; 186,4]\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Từ Hình~\ref{fig:timing} và Bảng~\ref{tab:timing}:
+\begin{itemize}
+\item \textbf{Bản thân việc cắt token có lợi.} Ở L3, số token ảnh giảm khoảng 78\% và số token vào LLM giảm khoảng 70\% (GQA) đến 75\% (MME). Prefill giảm từ 53 xuống khoảng 27~ms (trung vị, GQA) và từ 85 xuống khoảng 30~ms (MME). Trên toàn bộ MME test, chạy cùng các tiến trình khác, prefill giảm từ 396 xuống 97~ms (trung bình).
+\item \textbf{Bộ chọn của PP3 tốn 9--89~ms} (trung vị), tăng theo $K$ và $N$. PP3 nhanh hơn full ở L1 (\mi37\% trên GQA, \mi38\% trên MME), ngang full ở L3, và chậm hơn ở L4 trên MME.
+\item \textbf{Bất thường chưa giải thích.} Trên GQA, PP3 L3 chậm hơn PP3 L4 dù giữ ít token hơn. Nguyên nhân là prefill (trung vị 38,6 so với 27,5~ms), không phải bộ chọn (28,3 so với 23,3~ms). Bất thường còn nguyên khi dùng trung vị, nên không do vài câu ngoại lai. Các cấu hình được chạy tuần tự theo cùng một thứ tự trên mỗi câu; chúng tôi nghi đây là hiệu ứng trạng thái GPU theo thứ tự chạy, và sẽ đo lại với thứ tự xáo trộn.
+\item \textbf{Đầu--cuối.} ViT (trung vị khoảng 32~ms trên GQA và 150~ms trên MME) giống nhau cho mọi phương pháp, nên tỉ lệ tiết kiệm đầu--cuối nhỏ hơn. Ví dụ, tổng các trung vị của PP3 L1 là khoảng 94 so với 132~ms (GQA), và 224 so với 262~ms (MME).
+\item Bộ nhớ đỉnh gần như không đổi (lệch dưới 0,3~GB), vì trọng số mô hình chiếm phần lớn.
+\end{itemize}
+PP3 vì vậy được trình bày là phương pháp chất lượng cao ở cùng budget. Tăng tốc thực tế cần một bộ chọn nhanh hơn.
+
+% ======================================================================
+\FloatBarrier
+\section{Thảo luận}
+\textbf{Lợi ích đến từ đâu?} Ở cùng DPP và fold, thay điểm thủ công bằng score head tăng 3--7 điểm (Mục~\ref{sec:ablation}). Recall top-$K$ so với teacher tăng từ 0,30 lên 0,84. Điểm thủ công (cosine với câu hỏi) chỉ biết token ``giống'' câu hỏi; head học được những gì LLM thật sự dùng ở các lớp giữa, kể cả ngữ cảnh xung quanh đối tượng. So sánh trực tiếp với CDPruner trên tập test (Bảng~\ref{tab:main}) sẽ kiểm tra lại kết luận này với một DPP có điều kiện đã công bố.
+
+\textbf{Vì sao FastV-style kém?} Trên GQA và MMBench, FastV-style kém hơn chọn ngẫu nhiên ở mọi mức: attention ở lớp 2 dồn vào các token sink (vùng sáng, nền đồng nhất). Kết luận này không đúng với MME: ở L4 perception (1489,4 so với 1471,5), và ở cognition L1, L3, L4, FastV-style cao hơn ngẫu nhiên. Một khả năng là attention lớp nông vẫn tìm được vùng chữ, vốn có tương phản cao.
+
+\textbf{Có vượt được mô hình full không?} Trên GQA và MMBench thì không, đúng như dự kiến vì head bắt chước mô hình full. Trên MME perception, PP3 ở L4 không thấp hơn full, nhưng cũng không cao hơn có ý nghĩa.
+
+% ======================================================================
+\section{Hạn chế}
+\begin{enumerate}
+\item Một kích thước mô hình (2B) và một seed cho mỗi cấu hình.
+\item CDPruner trên tập test đang được chạy; FastV gốc (cắt trong LLM), SparseVLM và PyramidDrop chưa được so sánh. VisionZip không áp dụng được vì Qwen3-VL không có token [CLS].
+\item Fold không đồng nhất giữa các baseline (Mục~\ref{sec:setup}).
+\item Chưa tăng tốc thực tế: DPP tham lam tăng theo $NK^2$, và có một bất thường đo thời gian chưa giải thích (Mục~\ref{sec:timing}).
+\item Trần kỳ vọng là ngang mô hình full, vì teacher bắt chước mô hình full.
+\item Ảnh nhiều chữ: MME cognition giảm khoảng 80--140 điểm ở L3--L4 và khoảng 210 điểm ở L1, với mọi phương pháp. Head chỉ được huấn luyện trên GQA.
+\item MMBench chưa đạt non-inferiority ở L1--L4; câu hỏi dài hơn 64 token bị cắt trong head.
+\item Các lựa chọn của teacher (lớp 8--19, trọng số 0,5/0,5), đặc trưng $\log r$, và bộ tham số fold chưa có ablation riêng.
+\item Câu yes/no với đáp án ``no'' vẫn thấp hơn full.
+\end{enumerate}
+
+% ======================================================================
+\section{Kết luận}
+Thay điểm liên quan thủ công trong DPP có điều kiện bằng một score head 2 triệu tham số, chưng cất từ attention văn bản$\rightarrow$ảnh của chính LLM, cho một bộ chọn token ảnh mạnh trên mô hình DeepStack Qwen3-VL-2B. Ở cùng budget, PP3 tốt hơn chọn ngẫu nhiên, DivPrune và FastV-style trên GQA, MMBench và MME perception, với khoảng cách lớn nhất ở budget nhỏ nhất. Với 22--33\% token ảnh, PP3 đạt non-inferiority trên GQA, và không thấp hơn có ý nghĩa trên MME perception. Ảnh nhiều chữ và tốc độ của bộ chọn là hai vấn đề mở chính.
+
+Hướng phát triển:
+\begin{itemize}
+\item mở rộng sang Qwen3-VL-4B và nhiều seed;
+\item bộ chọn nhanh hơn (DPP trên tập ứng viên top-$k$, hoặc kernel GPU);
+\item dữ liệu teacher có ảnh nhiều chữ;
+\item mục tiêu huấn luyện có thể vượt mô hình full (teacher trên đáp án đúng);
+\item so sánh với FastV gốc, SparseVLM và PyramidDrop.
+\end{itemize}
+
+\FloatBarrier
+\appendices
+\section{Chi tiết score head \Htg}
+\label{app:head}
+
+\begin{table}[!htbp]
+\centering
+\caption{Các khối của score head \Htg{} (số tham số không phụ thuộc $N$)}
+\label{tab:head}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{@{}rlr@{}}
+\toprule
+\# & Khối & Tham số\\
+\midrule
+1 & Chiếu $v$: Linear $256\rightarrow256$ & 65\,792\\
+2 & Chiếu DeepStack: $3\times$ Linear $64\rightarrow64$ & 12\,480\\
+3 & Ghép $u_i$ (467 chiều) & 0\\
+4 & Chiếu từ câu hỏi: Linear $256\rightarrow256$ & 65\,792\\
+5 & Linear $467\rightarrow256$ & 119\,808\\
+6 & Self-attention token ảnh (kèm LN) & 263\,680\\
+7 & Embedding vị trí từ (64, 256) & 16\,384\\
+8 & Transformer encoder câu hỏi (4 head, FFN 512) & 527\,104\\
+9 & Cross-attention token$\rightarrow$từ (kèm LN) & 263\,680\\
+10 & FFN $256\rightarrow1024\rightarrow256$ (kèm LN) & 526\,080\\
+11 & LayerNorm cuối & 512\\
+12 & Điểm chung $a_i$: Linear $256\rightarrow1$ & 257\\
+13 & Điểm khớp từ ($W_k$, $W_q$) & 131\,584\\
+14--15 & $b_i=\operatorname{logsumexp}_j$; $s_i=a_i+b_i$ & 0\\
+\midrule
+& \textbf{Tổng} & \textbf{1\,993\,153}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Khối 1, 2, 4 là phần chiếu đầu vào (Bảng~\ref{tab:features}); khối 5--15 tương ứng với Mục~\ref{sec:head}. \Hmlp{} và \Hattn{} dùng chung khối 1--4. Mã nguồn, cấu hình và toàn bộ dự đoán sẽ được công bố khi bài báo được chấp nhận.
+
+\FloatBarrier
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

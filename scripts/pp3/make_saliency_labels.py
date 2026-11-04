@@ -1,11 +1,16 @@
 """PP3 step 2b: route-B labels (gradient x input saliency) for the training split.
 
-For each sample: full-token greedy answer (no EOS, <= 8 tokens), one backward
-pass for input gradients, then compressed features + saliency are appended to
+For each sample: the target answer (no EOS, <= 8 tokens), one backward pass
+for input gradients, then compressed features + saliency are appended to
 shards in data/features/pp3_scorer/. Use --start/--end to split the work.
 
-Example:
+The config's ``labels`` block chooses the label type (ADR 0002):
+    target: self | gt   full-token greedy answer (default) or the reference answer
+    signed: false|true  |gradient x input| (default) or the signed value
+
+Examples:
     uv run python scripts/pp3/make_saliency_labels.py --start 0 --end 10000
+    uv run python scripts/pp3/make_saliency_labels.py --config configs/methods/pp3_scorer_signed.yaml --end 10000
 """
 
 from __future__ import annotations
@@ -28,7 +33,12 @@ from token_reduction_vl.models.qwen3_vl_pruned import PrunedQwen3VL, question_te
 from token_reduction_vl.pruning.pp3_scorer.data import SaliencyRecord, ShardWriter, stored_sample_ids  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase, load_dsfold_params  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.features import FeatureCompressor, question_rows  # noqa: E402
-from token_reduction_vl.pruning.pp3_scorer.saliency import full_token_answer, gradient_x_input_saliency  # noqa: E402
+from token_reduction_vl.pruning.pp3_scorer.saliency import (  # noqa: E402
+    MAX_ANSWER_TOKENS,
+    full_token_answer,
+    gradient_x_input_saliency,
+    signed_gradient_x_input,
+)
 
 
 def main() -> None:
@@ -40,6 +50,11 @@ def main() -> None:
     config = load_yaml(args.config)
     labels = config["labels"]
     model = config["model"]
+    target = labels.get("target", "self")
+    if target not in ("self", "gt"):
+        raise SystemExit(f"labels.target must be 'self' or 'gt', got {target!r}")
+    saliency_fn = signed_gradient_x_input if labels.get("signed", False) else gradient_x_input_saliency
+    print(f"Labels: target={target}, signed={labels.get('signed', False)}, prefix={labels['prefix']}")
 
     runner = PrunedQwen3VL(model["id"], dtype=model.get("dtype"), device_map=model.get("device_map", "auto"))
     base = DSFoldBase(load_dsfold_params(PROJECT_ROOT / config["dsfold_params"]))
@@ -69,11 +84,16 @@ def main() -> None:
             text = question_text_for_scoring(sample.question, sample.metadata.get("choices") or [])
             try:
                 encoded = runner.encode(sample.image, sample.question, text)
-                answer = full_token_answer(runner, encoded)
+                if target == "gt":
+                    reference = sample.answers[0] if sample.answers else ""
+                    ids = runner.processor.tokenizer(reference, add_special_tokens=False)["input_ids"]
+                    answer = torch.tensor(ids[:MAX_ANSWER_TOKENS], dtype=torch.long)
+                else:
+                    answer = full_token_answer(runner, encoded)
                 if answer.numel() == 0:
                     skip(sample.sample_id, "empty_answer")
                     continue
-                saliency = gradient_x_input_saliency(runner, encoded, answer)
+                saliency = saliency_fn(runner, encoded, answer)
             except torch.cuda.OutOfMemoryError:
                 torch.cuda.empty_cache()
                 skip(sample.sample_id, "cuda_oom")
@@ -85,8 +105,9 @@ def main() -> None:
     print(f"Done. Shards in {output_dir}; skipped ids in {skip_log.name}")
 
 
-def record_sample(writer, sample, encoded, saliency, runner, base, compressor) -> None:
-    """Compress the sample's features with the fixed PCA and buffer them with its saliency."""
+def record_sample(writer, sample, encoded, saliency, runner, base, compressor, saliency_q=None) -> None:
+    """Compress the sample's features with the fixed PCA and buffer them with its saliency
+    (and an optional second target, used by make_attention_labels.py)."""
 
     x = runner.pruner_input(encoded, 1.0)
     with torch.no_grad():
@@ -106,6 +127,7 @@ def record_sample(writer, sample, encoded, saliency, runner, base, compressor) -
             z_ms=scores.z_ms.cpu().numpy(),
             q=q.half().cpu().numpy(),
             saliency=saliency.cpu().numpy(),
+            saliency_q=None if saliency_q is None else saliency_q.cpu().numpy(),
         )
     )
 

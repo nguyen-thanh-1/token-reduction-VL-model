@@ -1,4 +1,4 @@
-"""PP3 score heads: 3a MLP, 3b CNN with FiLM, 3c light transformer (``method.md`` §3).
+"""PP3 score heads: 3a MLP, 3b CNN with FiLM, 3c light transformer (``method.md`` §3), 3d text-guided (ADR 0003).
 
 Each head maps one sample's :class:`TokenFeatures` to raw scores ``s`` of
 shape ``[N]``; the pruner uses ``q̂ = softplus(s) + 1e-3`` inside the DPP kernel.
@@ -108,7 +108,60 @@ class ScoreTransformer(nn.Module):
         return self.out(self.norm_out(h)).reshape(-1)
 
 
-ARCHITECTURES: dict[str, type[nn.Module]] = {"3a": ScoreMLP, "3b": ScoreCNN, "3c": ScoreTransformer}
+MAX_QUESTION_TOKENS = 64
+
+
+class ScoreTextGuided(nn.Module):
+    """3d: 3c plus a text encoder and an explicit word-to-token relevance term (ADR 0003).
+
+    Question rows are static embeddings, so one self-attention layer with word
+    positions contextualises them first. The score adds
+    ``logsumexp_w ⟨k_i, q_w⟩ / √d``: a token ranks high when some word points to it.
+    """
+
+    def __init__(self, v_dim: int, level_dim: int, q_dim: int, heads: int = 4, dropout: float = 0.1) -> None:
+        super().__init__()
+        self.encoder = TokenEncoder(v_dim, level_dim, q_dim)
+        self.word_positions = nn.Embedding(MAX_QUESTION_TOKENS, QUESTION_DIM)
+        self.text = nn.TransformerEncoderLayer(
+            QUESTION_DIM, heads, dim_feedforward=512, dropout=dropout, batch_first=True, norm_first=True
+        )
+        self.inp = nn.Linear(UNIT_DIM, TOKEN_DIM)
+        self.norm_self = nn.LayerNorm(TOKEN_DIM)
+        self.self_attn = nn.MultiheadAttention(TOKEN_DIM, heads, dropout=dropout, batch_first=True)
+        self.norm_cross = nn.LayerNorm(TOKEN_DIM)
+        self.cross_attn = nn.MultiheadAttention(TOKEN_DIM, heads, dropout=dropout, batch_first=True)
+        self.norm_ffn = nn.LayerNorm(TOKEN_DIM)
+        self.ffn = nn.Sequential(nn.Linear(TOKEN_DIM, 1024), nn.GELU(), nn.Linear(1024, TOKEN_DIM))
+        self.norm_out = nn.LayerNorm(TOKEN_DIM)
+        self.out = nn.Linear(TOKEN_DIM, 1)
+        self.rel_k = nn.Linear(TOKEN_DIM, TOKEN_DIM)
+        self.rel_q = nn.Linear(QUESTION_DIM, TOKEN_DIM)
+
+    def forward(self, x: TokenFeatures) -> Tensor:
+        u, _, _, q_tokens = self.encoder(x)
+        h = self.inp(u).unsqueeze(0)
+        normed = self.norm_self(h)
+        h = h + self.self_attn(normed, normed, normed, need_weights=False)[0]
+        if not q_tokens.shape[0]:
+            h = h + self.ffn(self.norm_ffn(h))
+            return self.out(self.norm_out(h)).reshape(-1)
+        words = q_tokens[:MAX_QUESTION_TOKENS]
+        words = words + self.word_positions(torch.arange(words.shape[0], device=words.device))
+        words = self.text(words.unsqueeze(0))
+        h = h + self.cross_attn(self.norm_cross(h), words, words, need_weights=False)[0]
+        h = h + self.ffn(self.norm_ffn(h))
+        h = self.norm_out(h)[0]
+        relevance = (self.rel_k(h) @ self.rel_q(words[0]).T) / TOKEN_DIM**0.5
+        return self.out(h).reshape(-1) + torch.logsumexp(relevance, dim=1)
+
+
+ARCHITECTURES: dict[str, type[nn.Module]] = {
+    "3a": ScoreMLP,
+    "3b": ScoreCNN,
+    "3c": ScoreTransformer,
+    "3d": ScoreTextGuided,
+}
 
 
 def build_score_head(arch: str, dims: tuple[int, int, int]) -> nn.Module:

@@ -1,0 +1,23 @@
+{
+  "run_id": "final_fastv_L2_gqa",
+  "method": "pp3_scorer",
+  "variant": "fastv",
+  "level": "L2",
+  "source": "gqa_testdev_balanced",
+  "split": "all",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_attn50k.yaml (fastv_L2; scripts/pp3/run_diagnostics.py)",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-04T01:14:12+00:00",
+  "finished_at": "2026-11-04T02:06:02+00:00",
+  "rows": 12578,
+  "errors": 0,
+  "git_sha": "398f74266b6963323d68b1ffed3e41e5e1c858ad",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

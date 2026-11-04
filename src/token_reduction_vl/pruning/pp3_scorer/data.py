@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections import defaultdict
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +31,7 @@ class SaliencyRecord:
     z_ms: np.ndarray  # [N]
     q: np.ndarray  # [N_q, Dq] fp16 (compressed)
     saliency: np.ndarray  # [N]
+    saliency_q: np.ndarray | None = None  # [N] second target (attention teacher's question rows, ADR 0003)
 
     def features(self, log_ratio: float, device: torch.device | str = "cpu") -> TokenFeatures:
         n = int(self.v.shape[0])
@@ -47,6 +49,20 @@ class SaliencyRecord:
 
     def saliency_tensor(self, device: torch.device | str = "cpu") -> Tensor:
         return torch.from_numpy(np.asarray(self.saliency, dtype=np.float32)).to(device)
+
+    def target_tensor(self, label: str = "primary", mix: float = 0.5, device: torch.device | str = "cpu") -> Tensor:
+        """Training target: ``primary`` (``saliency``), ``question`` (``saliency_q``) or their ``mix``."""
+
+        if label == "primary":
+            return self.saliency_tensor(device)
+        if self.saliency_q is None:
+            raise ValueError(f"Label {label!r} needs saliency_q, which this shard does not store.")
+        second = torch.from_numpy(np.asarray(self.saliency_q, dtype=np.float32)).to(device)
+        if label == "question":
+            return second
+        if label == "mix":
+            return (1 - mix) * self.saliency_tensor(device) + mix * second
+        raise ValueError(f"Unknown label {label!r}; choose primary, question or mix.")
 
 
 class ShardWriter:
@@ -70,6 +86,9 @@ class ShardWriter:
         records = self.buffer
         offsets = np.cumsum([0, *[r.v.shape[0] for r in records]])
         q_offsets = np.cumsum([0, *[r.q.shape[0] for r in records]])
+        extra = {}
+        if all(r.saliency_q is not None for r in records):
+            extra["saliency_q"] = np.concatenate([r.saliency_q for r in records]).astype(np.float32)
         np.savez(
             self.directory / f"{self.prefix}_{self.shard_index:04d}.npz",
             v=np.concatenate([r.v for r in records]).astype(np.float16),
@@ -82,6 +101,7 @@ class ShardWriter:
             q_offsets=q_offsets,
             grid=np.array([r.grid_hw for r in records], dtype=np.int32),
             meta=np.array(json.dumps([[r.sample_id, r.image_id] for r in records])),
+            **extra,
         )
         self.shard_index += 1
         self.buffer = []
@@ -106,6 +126,7 @@ def iter_shard(path: Path) -> Iterator[SaliencyRecord]:
     # view of a fresh full-shard array alive and memory explodes.
     with np.load(path) as data:
         arrays = {key: data[key] for key in SHARD_ARRAYS}
+        second = data["saliency_q"] if "saliency_q" in data.files else None
     ids = json.loads(str(arrays["meta"]))
     offsets, q_offsets, grid = arrays["offsets"], arrays["q_offsets"], arrays["grid"]
     for index, (sample_id, image_id) in enumerate(ids):
@@ -121,6 +142,7 @@ def iter_shard(path: Path) -> Iterator[SaliencyRecord]:
             z_ms=arrays["z_ms"][start:end].copy(),
             q=arrays["q"][q_start:q_end].copy(),
             saliency=arrays["saliency"][start:end].copy(),
+            saliency_q=None if second is None else second[start:end].copy(),
         )
 
 
@@ -134,6 +156,34 @@ def load_records(directory: Path, prefix: str, max_samples: int | None = None) -
             if max_samples is not None and len(records) >= max_samples:
                 return records
     return records
+
+
+def contrastive_records(
+    records: list[SaliencyRecord], label: str = "mix", mix: float = 0.5, min_questions: int = 2
+) -> list[SaliencyRecord]:
+    """Question-specific targets (ADR 0004): ``t ∝ max(0, p − mean of p over the image's other questions)``.
+
+    Attention sinks get similar mass for every question on an image and cancel,
+    so what remains is the part of the teacher that depends on the question.
+    Images with fewer than ``min_questions`` samples, and samples with no
+    positive part, are dropped. The result stores ``t`` as ``saliency``.
+    """
+
+    by_image: dict[str, list[SaliencyRecord]] = defaultdict(list)
+    for record in records:
+        by_image[record.image_id].append(record)
+    result = []
+    for group in by_image.values():
+        targets = [record.target_tensor(label, mix) for record in group]
+        if len(group) < min_questions or len({t.numel() for t in targets}) != 1:
+            continue
+        stack = torch.stack([t / t.sum().clamp_min(1e-12) for t in targets])
+        total = stack.sum(0)
+        for record, p in zip(group, stack, strict=True):
+            contrast = (p - (total - p) / (len(group) - 1)).clamp_min(0)
+            if float(contrast.sum()) > 0:
+                result.append(replace(record, saliency=(contrast / contrast.sum()).numpy(), saliency_q=None))
+    return result
 
 
 def split_by_image(records: list[SaliencyRecord], holdout_fraction: float, seed: int) -> tuple[list[int], list[int]]:

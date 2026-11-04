@@ -7,10 +7,25 @@ from torch import Tensor
 
 
 def listnet_loss(scores: Tensor, saliency: Tensor, temperature: float = 0.5) -> Tensor:
-    """``−Σ_i P_i log Q_i`` with ``P = softmax((sal / mean sal) / T)``, ``Q = softmax(s)``."""
+    """``−Σ_i P_i log Q_i`` with ``P = softmax((sal / mean |sal|) / T)``, ``Q = softmax(s)``.
 
-    normalized = saliency.float() / saliency.float().mean().clamp_min(1e-12)
+    For non-negative saliency this is the original route-B target; for signed
+    saliency (ADR 0002) tokens that work against the answer get ``P_i ≈ 0``.
+    """
+
+    normalized = saliency.float() / saliency.float().abs().mean().clamp_min(1e-12)
     target = torch.softmax(normalized / temperature, dim=0)
+    return -(target * torch.log_softmax(scores.float(), dim=0)).sum()
+
+
+def distill_loss(scores: Tensor, teacher: Tensor, temperature: float = 1.0) -> Tensor:
+    """``−Σ_i P_i log Q_i`` with ``P ∝ teacher^(1/T)`` (a distribution over tokens) and ``Q = softmax(s)``.
+
+    ``T > 1`` flattens the teacher (e.g. to soften attention sinks), ``T < 1`` sharpens it (ADR 0003).
+    """
+
+    log_teacher = torch.log(teacher.float().clamp_min(1e-12)) / temperature
+    target = torch.softmax(log_teacher, dim=0)
     return -(target * torch.log_softmax(scores.float(), dim=0)).sum()
 
 

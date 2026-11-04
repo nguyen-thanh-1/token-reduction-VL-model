@@ -13,7 +13,7 @@ import torch
 from token_reduction_vl.pruning.base import BUDGET_LEVELS, budget_for_ratio
 
 from .data import SaliencyRecord, split_by_image
-from .losses import listnet_loss, recall_at_k
+from .losses import distill_loss, listnet_loss, recall_at_k
 from .models import build_score_head
 
 TRAIN_LEVELS = ("L1", "L2", "L3", "L4", "L5")
@@ -30,7 +30,23 @@ class RouteBConfig:
     holdout_fraction: float = 0.1
     patience: int = 3
     seed: int = 0
+    name: str | None = None
+    """Checkpoint name prefix; defaults to ``arch`` (e.g. ``3a_signed`` → ``score_head_3a_signed_seed0.pt``)."""
+    loss: str = "listnet"
+    """``listnet`` (saliency ranking) or ``distill`` (cross-entropy to a teacher distribution, ADR 0003)."""
+    label: str = "primary"
+    """Shard target: ``primary``, ``question`` or ``mix`` (see ``SaliencyRecord.target_tensor``);
+    ``contrast`` is resolved by scripts/pp3/train_score_head.py via ``contrastive_records``."""
+    mix: float = 0.5
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _loss(scores: torch.Tensor, target: torch.Tensor, config: RouteBConfig) -> torch.Tensor:
+    if config.loss == "listnet":
+        return listnet_loss(scores, target, config.temperature)
+    if config.loss == "distill":
+        return distill_loss(scores, target, config.temperature)
+    raise ValueError(f"Unknown loss {config.loss!r}; choose listnet or distill.")
 
 
 def _evaluate(head: torch.nn.Module, records: list[SaliencyRecord], indices: list[int], config: RouteBConfig) -> dict[str, float]:
@@ -41,15 +57,16 @@ def _evaluate(head: torch.nn.Module, records: list[SaliencyRecord], indices: lis
         for index in indices:
             record = records[index]
             features = record.features(math.log(ratio), config.device)
-            saliency = record.saliency_tensor(config.device)
+            saliency = record.target_tensor(config.label, config.mix, config.device)
             scores = head(features)
             k = budget_for_ratio(ratio, features.num_tokens)
-            losses.append(float(listnet_loss(scores, saliency, config.temperature)))
+            losses.append(float(_loss(scores, saliency, config)))
             recalls.append(recall_at_k(scores, saliency, k))
             # Hand-crafted PP1 quality as the reference ranking (α = 1, β = 0.5 of set D).
             baseline_recalls.append(recall_at_k(features.z_rel + 0.5 * features.z_ms, saliency, k))
     count = max(1, len(indices))
     return {
+        # Held-out loss of the configured objective; the key keeps its route-B name for old histories.
         "listnet": sum(losses) / count,
         "recall_at_k_L3": sum(recalls) / count,
         "recall_at_k_L3_handcrafted": sum(baseline_recalls) / count,
@@ -82,7 +99,7 @@ def train_route_b(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max(1, total_steps))
 
     best_loss, bad_epochs, history, first_epoch = float("inf"), 0, [], 0
-    tag = f"{config.arch}_seed{config.seed}"
+    tag = f"{config.name or config.arch}_seed{config.seed}"
     checkpoint = checkpoint_dir / f"score_head_{tag}.pt"
     last = checkpoint_dir / f"score_head_{tag}_last.pt"
     history_path = log_dir / f"history_{tag}.json"
@@ -112,7 +129,7 @@ def train_route_b(
                 # Route B is a ranking target; a random level keeps the log-r input meaningful.
                 ratio = BUDGET_LEVELS[rng.choice(TRAIN_LEVELS)]
                 features = record.features(math.log(ratio), config.device)
-                loss = loss + listnet_loss(head(features), record.saliency_tensor(config.device), config.temperature)
+                loss = loss + _loss(head(features), record.target_tensor(config.label, config.mix, config.device), config)
             loss = loss / len(batch)
             loss.backward()
             optimizer.step()

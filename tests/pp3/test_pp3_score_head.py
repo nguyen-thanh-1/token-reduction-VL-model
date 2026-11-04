@@ -14,7 +14,7 @@ from token_reduction_vl.pruning.pp3_scorer import (
 )
 from token_reduction_vl.pruning.pp3_scorer.data import SaliencyRecord, ShardWriter, load_records, split_by_image
 from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase
-from token_reduction_vl.pruning.pp3_scorer.losses import listnet_loss, recall_at_k, spearman
+from token_reduction_vl.pruning.pp3_scorer.losses import distill_loss, listnet_loss, recall_at_k, spearman
 from token_reduction_vl.pruning.pp3_scorer.models import UNIT_DIM
 
 DIM = 32
@@ -42,7 +42,7 @@ def test_unit_dimension_matches_method_doc() -> None:
     assert UNIT_DIM == 467
 
 
-@pytest.mark.parametrize("arch", ["3a", "3b", "3c"])
+@pytest.mark.parametrize("arch", ["3a", "3b", "3c", "3d"])
 def test_each_architecture_scores_every_token(arch: str) -> None:
     x = make_input()
     head = build_score_head(arch, (DIM, DIM, DIM))
@@ -97,3 +97,49 @@ def test_compressor_and_shards_round_trip(tmp_path) -> None:
     train, held_out = split_by_image(records, 0.5, seed=0)
     images = lambda idx: {records[i].image_id for i in idx}  # noqa: E731
     assert not images(train) & images(held_out)
+
+
+def test_listnet_with_signed_saliency_pushes_harmful_tokens_down() -> None:
+    signed = torch.tensor([2.0, 0.5, -0.1, -3.0])
+    harmful_last = listnet_loss(torch.tensor([3.0, 1.0, 0.0, -2.0]), signed)
+    harmful_first = listnet_loss(torch.tensor([1.0, 0.0, -2.0, 3.0]), signed)
+    assert harmful_last < harmful_first
+    # Non-negative saliency keeps the original normalisation by the mean.
+    positive = torch.tensor([5.0, 1.0, 0.1, 0.1])
+    expected = -(torch.softmax(positive / positive.mean() / 0.5, 0) * torch.log_softmax(torch.zeros(4), 0)).sum()
+    assert listnet_loss(torch.zeros(4), positive) == pytest.approx(float(expected))
+
+
+def test_text_guided_head_without_question_tokens() -> None:
+    x = make_input()
+    x = PrunerInput(**{**x.__dict__, "question_ids": torch.zeros(0, dtype=torch.long), "question_tokens": ()})
+    scores = build_score_head("3d", (DIM, DIM, DIM))(features(x))
+    assert scores.shape == (20,) and bool(torch.isfinite(scores).all())
+
+
+def test_distill_loss_is_smallest_at_the_teacher_distribution() -> None:
+    teacher = torch.tensor([0.6, 0.3, 0.1, 0.0])
+    matched = distill_loss(torch.log(teacher.clamp_min(1e-12)), teacher)
+    reversed_ = distill_loss(torch.log(teacher.flip(0).clamp_min(1e-12)), teacher)
+    assert float(matched) < float(reversed_)
+    # T > 1 flattens the target, so a sharply peaked prediction is penalised more.
+    peaked = torch.tensor([6.0, 0.0, 0.0, 0.0])
+    assert float(distill_loss(peaked, teacher, 4.0)) > float(distill_loss(peaked, teacher, 1.0))
+
+
+def test_shards_store_a_second_target(tmp_path) -> None:
+    def record(name: str) -> SaliencyRecord:
+        return SaliencyRecord(
+            sample_id=name, image_id=name, grid_hw=(2, 2),
+            v=np.zeros((4, 3)), f=np.zeros((3, 4, 2)), z_rel=np.zeros(4), z_ms=np.zeros(4), q=np.zeros((1, 3)),
+            saliency=np.array([0.4, 0.3, 0.2, 0.1]), saliency_q=np.array([0.0, 0.0, 0.5, 0.5]),
+        )
+
+    writer = ShardWriter(tmp_path, "attn", shard_size=2)
+    writer.add(record("a"))
+    writer.flush()
+    loaded = load_records(tmp_path, "attn")[0]
+    assert loaded.target_tensor("question").tolist() == [0.0, 0.0, 0.5, 0.5]
+    assert loaded.target_tensor("mix", 0.5).tolist() == pytest.approx([0.2, 0.15, 0.35, 0.3])
+    with pytest.raises(ValueError):
+        SaliencyRecord(**{**loaded.__dict__, "saliency_q": None}).target_tensor("mix")
