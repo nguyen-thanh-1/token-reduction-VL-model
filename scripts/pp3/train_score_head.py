@@ -32,6 +32,8 @@ def main() -> None:
     parser.add_argument("--max-samples", type=int, default=None, help="Cap loaded samples to limit RAM.")
     parser.add_argument("--name", default=None, help="Checkpoint name prefix (default: route_b.name or arch).")
     parser.add_argument("--resume", action="store_true", help="Continue from score_head_<arch>_seed<s>_last.pt.")
+    parser.add_argument("--resume-from", type=Path, default=None,
+                        help="Continue from another run's score_head_*_last.pt (new name / select_on).")
     args = parser.parse_args()
     config = load_yaml(args.config)
     route_b = dict(config["route_b"])
@@ -62,6 +64,7 @@ def main() -> None:
             output_dir,
             PROJECT_ROOT / "outputs" / "pp3_scorer" / "training",
             resume=args.resume,
+            resume_from=args.resume_from,
         )
         print(f"seed {seed}: best checkpoint {checkpoint}")
 

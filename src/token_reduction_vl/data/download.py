@@ -47,6 +47,9 @@ class DatasetRequest:
     config: str
     split: str
     output_subdir: Path
+    revision: str | None = None
+    image_key: str | None = None
+    """Row field that identifies the image; rows sharing it share one image file."""
 
 
 GQA_BALANCED_REQUESTS: tuple[DatasetRequest, ...] = tuple(
@@ -87,6 +90,24 @@ MME_REQUEST = DatasetRequest(
     output_subdir=Path("MME") / "test",
 )
 
+# ADR 0006: evaluation-only benchmarks, pinned revisions, never part of "all".
+POPE_REQUEST = DatasetRequest(
+    repository="lmms-lab-encoder/POPE",
+    config="default",
+    split="test",
+    output_subdir=Path("POPE") / "test",
+    revision="4db1276663dfa5eb8ad16a52d24c31a09e470896",
+    image_key="image_source",
+)
+
+SQA_IMG_REQUEST = DatasetRequest(
+    repository="lmms-lab-encoder/ScienceQA",
+    config="ScienceQA-IMG",
+    split="test",
+    output_subdir=Path("ScienceQA") / "img_test",
+    revision="69dd4d6b67373d38f96a5badd5d24d0eb5bcdc50",
+)
+
 
 def _resolve_split(request: DatasetRequest, token: str | None) -> str:
     """Resolve the requested split and report the actual available names."""
@@ -94,6 +115,7 @@ def _resolve_split(request: DatasetRequest, token: str | None) -> str:
     split_names = get_dataset_split_names(
         request.repository,
         config_name=request.config,
+        revision=request.revision,
         token=token,
     )
     if request.split in split_names:
@@ -216,11 +238,16 @@ def export_dataset_files(
             if image_value is not None:
                 raw = _image_bytes(image_value)
                 suffix = _image_suffix(raw)
-                stem = _safe_stem(_record_id(row, index), index)
-                image_path = images_dir / f"{index:08d}_{stem}{suffix}"
-                image_path.write_bytes(raw)
+                shared = row.get(request.image_key) if request.image_key else None
+                if shared not in (None, ""):
+                    image_path = images_dir / f"{_safe_stem(shared, index)}{suffix}"
+                else:
+                    stem = _safe_stem(_record_id(row, index), index)
+                    image_path = images_dir / f"{index:08d}_{stem}{suffix}"
+                if not image_path.exists() or shared in (None, ""):
+                    image_path.write_bytes(raw)
+                    image_count += 1
                 row["image"] = image_path.relative_to(output_dir).as_posix()
-                image_count += 1
 
             handle.write(
                 json.dumps(row, ensure_ascii=False, default=_json_default) + "\n"
@@ -233,6 +260,7 @@ def export_dataset_files(
         "repository": request.repository,
         "config": request.config,
         "split": split,
+        "revision": request.revision,
         "rows": len(source),
         "images": image_count,
         "records": RECORDS_FILENAME,
@@ -294,6 +322,7 @@ def _download_request(
             request.repository,
             name=request.config,
             split=split,
+            revision=request.revision,
             cache_dir=str(cache_dir) if cache_dir else None,
             token=token,
         )
@@ -317,6 +346,10 @@ def _requests_for(dataset_name: str) -> Sequence[DatasetRequest]:
         return MMB_REQUESTS
     if dataset_name == "mme":
         return (MME_REQUEST,)
+    if dataset_name == "pope":
+        return (POPE_REQUEST,)
+    if dataset_name == "sqa":
+        return (SQA_IMG_REQUEST,)
     return (*GQA_BALANCED_REQUESTS, *MMB_REQUESTS, MME_REQUEST)
 
 
@@ -328,9 +361,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dataset",
-        choices=("gqa", "mmb", "mme", "all"),
+        choices=("gqa", "mmb", "mme", "pope", "sqa", "all"),
         default="all",
-        help="Dataset group to download (default: all).",
+        help="Dataset group to download (default: all = GQA, MMBench, MME; POPE and ScienceQA only by name).",
     )
     parser.add_argument(
         "--output-dir",

@@ -1,0 +1,23 @@
+{
+  "run_id": "final_divprune_L1_pope",
+  "method": "pp3_scorer",
+  "variant": "divprune",
+  "level": "L1",
+  "source": "pope_test",
+  "split": "all",
+  "limit": null,
+  "config": "configs/methods/pp3_scorer_attn50k.yaml (divprune_L1; scripts/pp3/run_diagnostics.py)",
+  "dsfold_params": "configs/dsfold_D-1.0.yaml",
+  "checkpoint": null,
+  "model_id": "Qwen/Qwen3-VL-2B-Instruct",
+  "started_at": "2026-11-04T14:15:38+00:00",
+  "finished_at": "2026-11-04T15:19:16+00:00",
+  "rows": 9000,
+  "errors": 0,
+  "git_sha": "856da18f880b254fb7e45fbc95955a264ff1ae50",
+  "python": "3.12.11",
+  "torch": "2.14.1+cu130",
+  "transformers": "5.19.0",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti"
+}

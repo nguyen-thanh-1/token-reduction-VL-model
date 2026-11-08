@@ -29,7 +29,7 @@ from tqdm import tqdm  # noqa: E402
 
 from token_reduction_vl.config import load_yaml  # noqa: E402
 from token_reduction_vl.data.splits import iter_split_samples, read_split  # noqa: E402
-from token_reduction_vl.models.qwen3_vl_pruned import PrunedQwen3VL, question_text_for_scoring  # noqa: E402
+from token_reduction_vl.models.qwen3_vl_pruned import load_runner, question_text_for_scoring  # noqa: E402
 from token_reduction_vl.pruning.base import BUDGET_LEVELS, budget_for_ratio  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.attention_teacher import DEFAULT_LAYERS, attention_teacher  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.data import ShardWriter, stored_sample_ids  # noqa: E402
@@ -53,7 +53,9 @@ def main() -> None:
     layers = tuple(labels.get("layers", DEFAULT_LAYERS))
     print(f"Attention labels: layers {layers[0]}..{layers[-1]} ({len(layers)}), prefix={labels['prefix']}")
 
-    runner = PrunedQwen3VL(model["id"], dtype=model.get("dtype"), device_map=model.get("device_map", "auto"))
+    runner = load_runner(model)
+    if max(layers) >= runner.language_model.config.num_hidden_layers:
+        raise SystemExit(f"Teacher layers {layers} exceed the {runner.language_model.config.num_hidden_layers} LLM layers of {model['id']}.")
     base = DSFoldBase(load_dsfold_params(PROJECT_ROOT / config["dsfold_params"]))
     compressor = FeatureCompressor.load(PROJECT_ROOT / config["compressor"])
     output_dir = PROJECT_ROOT / labels["output_dir"]

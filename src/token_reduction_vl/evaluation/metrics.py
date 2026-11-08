@@ -84,9 +84,9 @@ def score_prediction_record(record: Mapping[str, Any]) -> bool | None:
     dataset = str(_record_field(record, "dataset", ""))
     if dataset == "gqa":
         return _gqa_correct(record)
-    if dataset == "mmbench":
+    if dataset in {"mmbench", "scienceqa"}:
         return _mmb_correct(record)
-    if dataset == "mme":
+    if dataset in {"mme", "pope"}:
         return _mme_correct(record)
     raise ValueError(f"Unsupported benchmark dataset: {dataset!r}")
 
@@ -143,6 +143,50 @@ def _score_mme(records: list[Mapping[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def pope_counts(records: Iterable[Mapping[str, Any]]) -> dict[str, float]:
+    """Accuracy, precision, recall, F1 ("yes" positive) and yes-ratio of POPE records.
+
+    An answer that is neither yes nor no is wrong and is counted as a "no", so it
+    cannot raise precision (ADR 0006).
+    """
+
+    tp = fp = fn = tn = correct = 0
+    for record in records:
+        references = _references(record)
+        if not references:
+            continue
+        gold = parse_yes_no(references[0]) == "yes"
+        said_yes = parse_yes_no(str(record.get("prediction", ""))) == "yes"
+        tp += gold and said_yes
+        fp += (not gold) and said_yes
+        fn += gold and not said_yes
+        tn += (not gold) and not said_yes
+        correct += _mme_correct(record) is True
+    total = tp + fp + fn + tn
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    return {
+        "questions": total,
+        "accuracy": correct / total if total else 0.0,
+        "precision": precision,
+        "recall": recall,
+        "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
+        "yes_ratio": (tp + fp) / total if total else 0.0,
+    }
+
+
+def _score_pope(records: list[Mapping[str, Any]]) -> dict[str, Any]:
+    result = _basic_result("pope", [score_prediction_record(record) for record in records])
+    by_category: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for record in records:
+        by_category[str(_record_field(record, "category", "uncategorized"))].append(record)
+    categories = {name: pope_counts(rows) for name, rows in sorted(by_category.items())}
+    result["categories"] = categories
+    result["pope_mean_f1"] = sum(c["f1"] for c in categories.values()) / len(categories)
+    result["pope_mean_accuracy"] = sum(c["accuracy"] for c in categories.values()) / len(categories)
+    return result
+
+
 def score_prediction_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Score one prediction file using its canonical dataset metadata."""
 
@@ -153,8 +197,10 @@ def score_prediction_records(records: Iterable[Mapping[str, Any]]) -> dict[str, 
     if len(datasets) != 1 or "" in datasets:
         raise ValueError(f"Expected exactly one dataset in predictions, found {sorted(datasets)}")
     dataset = datasets.pop()
-    if dataset in {"gqa", "mmbench"}:
+    if dataset in {"gqa", "mmbench", "scienceqa"}:
         return _basic_result(dataset, [score_prediction_record(record) for record in rows])
     if dataset == "mme":
         return _score_mme(rows)
+    if dataset == "pope":
+        return _score_pope(rows)
     raise ValueError(f"Unsupported benchmark dataset: {dataset!r}")

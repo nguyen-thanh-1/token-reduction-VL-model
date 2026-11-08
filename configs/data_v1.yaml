@@ -11,6 +11,8 @@ protocol:
     - gqa_testdev
     - mmb_validation
     - mme_test
+    - pope_test       # ADR 0006
+    - sqa_img_test    # ADR 0006
   inference_only:
     - gqa_test
     - mmb_test
@@ -44,3 +46,11 @@ sources:
     dataset: mme
     split: test
     path: data/processed/v1/mme/test.jsonl
+  pope_test:
+    dataset: pope
+    split: test
+    path: data/processed/v1/pope/test.jsonl
+  sqa_img_test:
+    dataset: scienceqa
+    split: img_test
+    path: data/processed/v1/scienceqa/img_test.jsonl

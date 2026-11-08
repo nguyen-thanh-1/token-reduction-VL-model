@@ -40,6 +40,7 @@ route_b:
   temperature: 1.0           # P ∝ teacher^(1/T); > 1 softens attention sinks
   holdout_fraction: 0.1
   patience: 3
+  select_on: recall          # best checkpoint by held-out recall@K L3; same epoch (19) as by loss here (ADR 0007)
   seeds: [0]
   output_dir: outputs/pp3_scorer/checkpoints
 

@@ -35,3 +35,12 @@ data:
     gqa_testdev_balanced:
       kind: canonical
       path: data/processed/v1/gqa/testdev.jsonl
+
+    # ADR 0006: evaluation-only benchmarks.
+    pope_test:
+      kind: canonical
+      path: data/processed/v1/pope/test.jsonl
+
+    sqa_img_test:
+      kind: canonical
+      path: data/processed/v1/scienceqa/img_test.jsonl

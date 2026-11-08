@@ -23,7 +23,7 @@ from tqdm import tqdm  # noqa: E402
 
 from token_reduction_vl.config import load_yaml  # noqa: E402
 from token_reduction_vl.data.splits import iter_split_samples, read_split  # noqa: E402
-from token_reduction_vl.models.qwen3_vl_pruned import PrunedQwen3VL, question_text_for_scoring  # noqa: E402
+from token_reduction_vl.models.qwen3_vl_pruned import load_runner, question_text_for_scoring  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase, load_dsfold_params  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.features import FeatureCompressor, question_rows  # noqa: E402
 
@@ -41,7 +41,7 @@ def main() -> None:
         raise SystemExit(f"{output} already exists; labels depend on it. Use --force only before creating labels.")
     fit = config["compressor_fit"]
     model = config["model"]
-    runner = PrunedQwen3VL(model["id"], dtype=model.get("dtype"), device_map=model.get("device_map", "auto"))
+    runner = load_runner(model)
     base = DSFoldBase(load_dsfold_params(PROJECT_ROOT / config["dsfold_params"]))
     ids = read_split(PROJECT_ROOT / config["labels"]["split"])[: fit["num_samples"]]
 

@@ -1,0 +1,21 @@
+# 20 MME test questions on the largest images (pixels); VRAM smoke test for a new checkpoint (ADR 0007)
+mme:test:landmark/04d67117549e07a8.jpg:00001402
+mme:test:landmark/04d67117549e07a8.jpg:00001403
+mme:test:landmark/0c06fe97f38f6f88.jpg:00001378
+mme:test:landmark/0c06fe97f38f6f88.jpg:00001379
+mme:test:landmark/005150f80de6f487.jpg:00001510
+mme:test:landmark/005150f80de6f487.jpg:00001511
+mme:test:landmark/05b01b255cec2bfb.jpg:00001362
+mme:test:landmark/05b01b255cec2bfb.jpg:00001363
+mme:test:landmark/05bcf05b4460d2c3.jpg:00001608
+mme:test:landmark/05bcf05b4460d2c3.jpg:00001609
+mme:test:landmark/008053e6bb5afa33.jpg:00001524
+mme:test:landmark/008053e6bb5afa33.jpg:00001525
+mme:test:landmark/050464e4ebc0b36d.jpg:00001258
+mme:test:landmark/050464e4ebc0b36d.jpg:00001259
+mme:test:landmark/014c50e91cf799c7.jpg:00001494
+mme:test:landmark/014c50e91cf799c7.jpg:00001495
+mme:test:landmark/002ae473a76362a6.jpg:00001536
+mme:test:landmark/002ae473a76362a6.jpg:00001537
+mme:test:landmark/15b75eb6fca4aeb6.jpg:00001304
+mme:test:landmark/15b75eb6fca4aeb6.jpg:00001305

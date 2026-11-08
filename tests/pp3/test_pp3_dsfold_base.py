@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import torch
 
 from token_reduction_vl.pruning import PrunerInput, validate_output
@@ -88,3 +89,43 @@ def test_dsfold_base_output_is_valid_at_every_level() -> None:
         xr = replace(x, ratio=ratio)
         out = DSFoldBase().select(xr)
         validate_output(xr, out)
+
+
+def _random_tokens(n: int, dim: int, seed: int, duplicate: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
+    generator = torch.Generator().manual_seed(seed)
+    v = torch.randn(n, dim, generator=generator)
+    if duplicate:  # forces the d2 < eps stop rule
+        v[n // 2 :] = v[: n - n // 2].clone()
+    return unit_rows(v), torch.rand(n, generator=generator) + 0.01
+
+
+def test_sync_free_dpp_steps_match_the_reference_on_cpu() -> None:
+    from token_reduction_vl.pruning.pp3_scorer.dsfold_base import dpp
+
+    for seed, (n, dim, k, duplicate) in enumerate([(40, 8, 12, False), (60, 4, 30, True), (90, 32, 45, False)]):
+        v, quality = _random_tokens(n, dim, seed, duplicate)
+        state = dpp._DppState(v @ v.T, quality, k, 1e-6)
+        for _ in range(k + dpp.GRAPH_UNROLL):  # padded extra steps must not disturb the first K
+            state.step()
+        reference = dpp.greedy_dpp_reference(v, quality, k)
+        stops = torch.nonzero(~(state.gains[:k] >= 1e-6)).flatten()  # rank < K also stops early
+        stop = int(stops[0]) if stops.numel() else k
+        assert stop >= min(dim, k) or duplicate
+        assert torch.equal(state.order[:stop], reference.order[:stop])
+
+        maxmin = dpp._MaxMinState(v, quality, k)
+        for _ in range(k):
+            maxmin.step()
+        assert torch.equal(maxmin.order[:k], dpp.weighted_maxmin_reference(v, quality, k).order)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graph path needs a GPU")
+def test_graphed_selectors_match_the_reference_on_cuda() -> None:  # pragma: no cover - GPU only
+    from token_reduction_vl.pruning.pp3_scorer.dsfold_base import dpp
+
+    for seed, (n, dim, k, duplicate) in enumerate([(300, 64, 67, False), (500, 4, 200, True), (1800, 256, 400, False)]):
+        v, quality = _random_tokens(n, dim, seed, duplicate)
+        v, quality = v.cuda(), quality.cuda()
+        assert torch.equal(dpp.greedy_dpp(v, quality, k).order.cpu(), dpp.greedy_dpp_reference(v, quality, k).order.cpu())
+        assert torch.equal(dpp.weighted_maxmin(v, quality, k).order.cpu(),
+                           dpp.weighted_maxmin_reference(v, quality, k).order.cpu())

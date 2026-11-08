@@ -10,6 +10,11 @@ description: Implement safe and reproducible downloads for the GQA, MMBench, and
 - GQA: `lmms-lab-encoder/GQA`
 - MMBench: `HuggingFaceM4/MMBench`
 - MME: `lmms-lab-encoder/MME`
+- POPE: `lmms-lab-encoder/POPE` (config `default`, split `test`; ADR 0006)
+- ScienceQA-IMG: `lmms-lab-encoder/ScienceQA` (config `ScienceQA-IMG`, split `test`; ADR 0006)
+
+POPE and ScienceQA have pinned revisions in `download.py` and are not part of
+`--dataset all`; download them only by name.
 
 ## GQA restriction
 

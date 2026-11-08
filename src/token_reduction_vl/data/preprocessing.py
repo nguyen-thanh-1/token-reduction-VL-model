@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .adapters import iter_gqa_samples, iter_mmb_samples, iter_mme_samples
+from .adapters import iter_gqa_samples, iter_mmb_samples, iter_mme_samples, iter_pope_samples, iter_sqa_samples
 from .schema import SCHEMA_VERSION, CanonicalSample
 
 
@@ -64,14 +64,31 @@ TARGETS: tuple[TargetSpec, ...] = (
         split="test",
         source_dirs=(Path("MME") / "test",),
     ),
+    TargetSpec(
+        key="pope_test",
+        dataset_group="pope",
+        output=Path("pope") / "test.jsonl",
+        split="test",
+        source_dirs=(Path("POPE") / "test",),
+    ),
+    TargetSpec(
+        key="sqa_img_test",
+        dataset_group="sqa",
+        output=Path("scienceqa") / "img_test.jsonl",
+        split="img_test",
+        source_dirs=(Path("ScienceQA") / "img_test",),
+    ),
 )
+LEGACY_GROUPS = frozenset({"gqa", "mmb", "mme"})
+"""``--dataset all`` keeps its original meaning; ADR 0006 benchmarks are selected by name."""
 
 
 def selected_targets(dataset_group: str, splits: tuple[str, ...] = ()) -> tuple[TargetSpec, ...]:
     targets = tuple(
         target
         for target in TARGETS
-        if dataset_group == "all" or target.dataset_group == dataset_group
+        if (dataset_group == "all" and target.dataset_group in LEGACY_GROUPS)
+        or target.dataset_group == dataset_group
     )
     if splits:
         requested = set(splits)
@@ -101,6 +118,10 @@ def _iter_target(
         )
     if target.dataset_group == "mmb":
         return iter_mmb_samples(paths[0], split=target.split, project_root=project_root)
+    if target.dataset_group == "pope":
+        return iter_pope_samples(paths[0], split=target.split, project_root=project_root)
+    if target.dataset_group == "sqa":
+        return iter_sqa_samples(paths[0], split=target.split, project_root=project_root)
     return iter_mme_samples(paths[0], split=target.split, project_root=project_root)
 
 
@@ -255,7 +276,7 @@ def preprocess_targets(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--dataset", choices=("gqa", "mmb", "mme", "all"), default="all"
+        "--dataset", choices=("gqa", "mmb", "mme", "pope", "sqa", "all"), default="all"
     )
     parser.add_argument(
         "--split",

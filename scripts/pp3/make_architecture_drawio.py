@@ -70,7 +70,7 @@ def edge(src, tgt, label="", dashed=False, color="#333333", exit=None, entry=Non
 
 
 # ---------------------------------------------------------------- title + legend
-text(40, 10, 2600, 50, "<b>PP3 — chọn token ảnh theo câu hỏi bằng score head học từ attention (head 3d_attn50k) trên Qwen3-VL-2B-Instruct</b>", 26)
+text(40, 10, 2600, 50, "<b>DeSTiL — chọn token ảnh theo câu hỏi bằng score head học từ attention (head 3d_attn50k) trên Qwen3-VL-2B-Instruct</b>", 26)
 text(40, 58, 2600, 30, "Nguyễn Thiện Thanh, Nguyễn Trung Hiếu, Gia Bảo — GVHD: Lê Phú Nguyên. Qwen3-VL đóng băng hoàn toàn; chỉ score head (1.993.153 tham số) được huấn luyện.", 15)
 lx = 40
 for label, colors in (("Qwen3-VL đóng băng", FROZEN), ("Học (score head)", LEARN), ("Thuật toán cố định, không học", ALGO),
@@ -127,7 +127,7 @@ llm = box(1760, 620, 740, 200,
           "Chuỗi vào = text + <b>K token ảnh giữ lại</b> (thay vì N) tại <b>vị trí M-RoPE gốc</b> (t, h, w) của chúng<br>"
           "DeepStack: f'⁽¹⁾,f'⁽²⁾,f'⁽³⁾ của K token cộng vào hidden state ở lớp 0, 1, 2<br>"
           "28 lớp, hidden 2048, 16 Q / 8 KV head, FFN 6144, 1,72B tham số<br>"
-          "Attention nhanh (SDPA / FlashAttention) — PP3 không cần trọng số attention lúc suy luận",
+          "Attention nhanh (SDPA / FlashAttention) — DeSTiL không cần trọng số attention lúc suy luận",
           FROZEN, 13, bold_title="LLM Qwen3 (đóng băng)")
 ans = box(2560, 700, 200, 120, "greedy decode<br>tối đa 32 token<br>→ câu trả lời", DATA, 13, bold_title="Đầu ra")
 saving = box(980, 620, 470, 200,
@@ -164,7 +164,7 @@ loss = box(1390, 940, 300, 190,
 text(50, 1160, 1640, 280,
      "<b>Vì sao làm vậy?</b> Attention cho biết LLM thực sự \"nhìn\" token ảnh nào khi trả lời câu hỏi. Lúc suy luận, đọc attention bên trong LLM "
      "(như FastV) buộc phải chạy LLM trên đủ N token và dùng attention eager (chậm, tốn bộ nhớ: ảnh MME 13.862 token cần ma trận 16 × 13.862² ≈ 6 GB). "
-     "PP3 học trước một mạng nhỏ <b>đoán</b> bản đồ attention đó từ chính token ảnh + câu hỏi, nên chọn token <b>trước</b> LLM và LLM vẫn dùng FlashAttention.<br><br>"
+     "DeSTiL học trước một mạng nhỏ <b>đoán</b> bản đồ attention đó từ chính token ảnh + câu hỏi, nên chọn token <b>trước</b> LLM và LLM vẫn dùng FlashAttention.<br><br>"
      "<b>Nguồn nhãn thay thế (ablation):</b> nhãn gradient × input (head 3a). Với 50k nhãn hai nguồn ngang nhau; với 10k nhãn teacher hơn +1,70 điểm.<br>"
      "<b>Giới hạn:</b> teacher bắt chước mô hình full nên trần kỳ vọng là ngang full.", 14)
 edge(data, full)
@@ -174,7 +174,7 @@ edge(label, loss, "mục tiêu p")
 edge(loss, head, "trọng số đã học", dashed=True, color="#9673A6", exit=(0.5, 0), entry=(0.5, 1))
 
 # ---------------------------------------------------------------- panel C: PP3-fc
-panel(1760, 890, 1040, 560, "C. BIẾN THỂ DỄ DIỄN GIẢI PP3-fc (focus + context)", ("#FBF7FD", "#9673A6"))
+panel(1760, 890, 1040, 560, "C. BIẾN THỂ DỄ DIỄN GIẢI DeSTiL-fc (focus + context)", ("#FBF7FD", "#9673A6"))
 sink = box(1790, 950, 470, 150,
            "Teacher dồn nhiều attention vào nền (trời, tường) cho <b>mọi</b> câu hỏi:<br>"
            "tập giữ của các câu hỏi khác nhau trên cùng ảnh trùng 0,65 (L3)<br>so với 0,13 nếu chọn ngẫu nhiên",

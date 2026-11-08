@@ -1,0 +1,54 @@
+# PP3 on a second checkpoint, Qwen3-VL-4B-Instruct (ADR 0007). Same method and
+# hyper-parameters as pp3_scorer_attn50k.yaml (2B); only the model, the teacher
+# layers (same relative depth) and every output path change.
+# Steps: fit_compressor.py -> make_attention_labels.py -> train_score_head.py
+#        -> run_diagnostics.py --prefix final4b (the prefix must end with run_tag).
+method: pp3_scorer
+factory: token_reduction_vl.pruning.pp3_scorer.factory:build_pruner
+dsfold_params: configs/dsfold_D-1.0.yaml
+
+model:
+  id: Qwen/Qwen3-VL-4B-Instruct
+  revision: ebb281ec70b05090aa6165b016eac8ec08e71b17
+  run_tag: 4b                # run directories: <prefix ending in 4b>_<name>_<dataset>
+  dtype: auto                # bf16, as for 2B (no quantization; ADR 0007)
+  device_map: auto
+  attn_implementation: null
+  max_new_tokens: 32
+
+# Refitted on 4B features (LLM width 2560 instead of 2048); same output dims, so
+# the score head keeps its size.
+compressor: data/features/pp3_scorer_4b/compressor.npz
+compressor_fit:
+  num_samples: 1000
+  v_dim: 256
+  level_dim: 64
+  q_dim: 256
+
+labels:
+  split: configs/splits/gqa_train_50k.txt
+  canonical: data/processed/v1/gqa/train.jsonl
+  output_dir: data/features/pp3_scorer_4b
+  prefix: attn4b_gqa_train
+  # 2B averages layers 8-19 of 28 (relative depth 0.29-0.68); the same depth of 36 layers.
+  layers: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+  shard_size: 500
+
+route_b:
+  arch: 3d
+  name: 3d_attn4b50k_rec    # v1 3d_attn4b (20k labels), v2 3d_attn4b50k (select by loss): ADR 0007
+  loss: distill
+  label: mix
+  mix: 0.5
+  epochs: 20
+  lr: 3.0e-4
+  weight_decay: 1.0e-2
+  batch_size: 16
+  temperature: 1.0
+  holdout_fraction: 0.1
+  patience: 3
+  select_on: recall          # held-out loss and recall disagree on 4B (ADR 0007, amendment 2)
+  seeds: [0]
+  output_dir: outputs/pp3_scorer/checkpoints
+
+checkpoint: outputs/pp3_scorer/checkpoints/score_head_3d_attn4b50k_rec_seed0.pt

@@ -38,6 +38,9 @@ class RouteBConfig:
     """Shard target: ``primary``, ``question`` or ``mix`` (see ``SaliencyRecord.target_tensor``);
     ``contrast`` is resolved by scripts/pp3/train_score_head.py via ``contrastive_records``."""
     mix: float = 0.5
+    select_on: str = "listnet"
+    """Held-out criterion for the best checkpoint and early stopping: ``listnet`` (loss of the
+    configured objective, lower is better) or ``recall`` (recall@K at L3, higher is better)."""
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -47,6 +50,15 @@ def _loss(scores: torch.Tensor, target: torch.Tensor, config: RouteBConfig) -> t
     if config.loss == "distill":
         return distill_loss(scores, target, config.temperature)
     raise ValueError(f"Unknown loss {config.loss!r}; choose listnet or distill.")
+
+
+def _selection_score(metrics: dict[str, float], select_on: str) -> float:
+    """Lower is better."""
+    if select_on == "listnet":
+        return metrics["listnet"]
+    if select_on == "recall":
+        return -metrics["recall_at_k_L3"]
+    raise ValueError(f"Unknown select_on {select_on!r}; choose listnet or recall.")
 
 
 def _evaluate(head: torch.nn.Module, records: list[SaliencyRecord], indices: list[int], config: RouteBConfig) -> dict[str, float]:
@@ -81,12 +93,16 @@ def train_route_b(
     log_dir: Path,
     *,
     resume: bool = False,
+    resume_from: Path | None = None,
 ) -> Path:
     """Train with ListNet, early-stop on held-out images, save the best checkpoint.
 
     ``score_head_<arch>_seed<s>_last.pt`` is written after every epoch; with
     ``resume=True`` training continues from it. Shuffling is seeded per epoch,
-    so a resumed run sees the same order as an uninterrupted one.
+    so a resumed run sees the same order as an uninterrupted one. ``resume_from``
+    continues from another run's ``_last.pt`` (e.g. under a new name or a new
+    ``select_on``); the best epoch and the patience counter are recomputed from
+    the stored history with this config's criterion.
     """
 
     torch.manual_seed(config.seed)
@@ -103,14 +119,25 @@ def train_route_b(
     checkpoint = checkpoint_dir / f"score_head_{tag}.pt"
     last = checkpoint_dir / f"score_head_{tag}_last.pt"
     history_path = log_dir / f"history_{tag}.json"
-    if resume and last.exists():
-        state = torch.load(last, map_location=config.device, weights_only=False)
+    source = resume_from if resume_from is not None else (last if resume and last.exists() else None)
+    if source is not None:
+        state = torch.load(source, map_location=config.device, weights_only=False)
         head.load_state_dict(state["state_dict"])
         optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
-        best_loss, bad_epochs, history = state["best_loss"], state["bad_epochs"], state["history"]
+        history = state["history"]
         first_epoch = state["epoch"] + 1
-        print(f"Resuming {tag} from epoch {first_epoch}")
+        scores = [_selection_score(entry, config.select_on) for entry in history]
+        best_epoch = min(range(len(scores)), key=scores.__getitem__)
+        best_loss, bad_epochs = scores[best_epoch], len(scores) - 1 - best_epoch
+        if not checkpoint.exists():
+            if bad_epochs:
+                raise ValueError(
+                    f"{source}: best epoch by {config.select_on} is {history[best_epoch]['epoch']}, "
+                    f"not the stored last epoch, and {checkpoint.name} does not exist."
+                )
+            torch.save({"arch": config.arch, "dims": dims, "state_dict": head.state_dict(), "config": asdict(config)}, checkpoint)
+        print(f"Resuming {tag} from epoch {first_epoch} ({source.name}; best epoch {history[best_epoch]['epoch']} by {config.select_on})")
         if bad_epochs >= config.patience:
             return checkpoint
 
@@ -142,8 +169,9 @@ def train_route_b(
             "lr": scheduler.get_last_lr()[0],
         })
         history.append(metrics)
-        if metrics["listnet"] < best_loss:
-            best_loss, bad_epochs = metrics["listnet"], 0
+        score = _selection_score(metrics, config.select_on)
+        if score < best_loss:
+            best_loss, bad_epochs = score, 0
             torch.save({"arch": config.arch, "dims": dims, "state_dict": head.state_dict(), "config": asdict(config)}, checkpoint)
         else:
             bad_epochs += 1

@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -53,9 +54,9 @@ from tqdm import tqdm  # noqa: E402
 from token_reduction_vl.config import load_yaml  # noqa: E402
 from token_reduction_vl.data.splits import iter_split_samples, read_split  # noqa: E402
 from token_reduction_vl.evaluation.run_meta import utc_now, write_run_meta  # noqa: E402
-from token_reduction_vl.models.qwen3_vl_pruned import PrunedQwen3VL, question_text_for_scoring  # noqa: E402
+from token_reduction_vl.models.qwen3_vl_pruned import check_run_prefix, load_runner, question_text_for_scoring  # noqa: E402
 from token_reduction_vl.pruning.base import BUDGET_LEVELS, NoOpPruner  # noqa: E402
-from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase  # noqa: E402
+from token_reduction_vl.pruning.pp3_scorer.dsfold_base import DSFoldBase, load_dsfold_params  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.baselines import CDPrunerPruner, DivPrunePruner, FastVPruner  # noqa: E402
 from token_reduction_vl.pruning.pp3_scorer.diagnostics import RandomKeepPruner, TopScorePruner  # noqa: E402
 
@@ -63,7 +64,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "common"))
 from run_pruned import finished_rows, load_pruner, prediction_record  # noqa: E402
 
 BASELINE_CONFIG = PROJECT_ROOT / "configs" / "baseline_qwen3_vl.yaml"
-DATASETS = {"gqa": "gqa", "mmb": "mmb", "mme": "mme"}
+DATASETS = {"gqa": "gqa", "mmb": "mmb", "mme": "mme", "pope": "pope", "sqa": "sqa"}
 EXTRA_LEVELS = ("L1", "L2", "L5")
 
 
@@ -85,16 +86,25 @@ def build_runs(method_config: str, tag: str, device: str, fc_overrides: dict[str
     """``(name, method_dir, variant, level, ratio, pruner, extra)`` for every configuration;
     ``extra`` runs only when named in --only."""
 
-    _, scored, _ = load_pruner(method_config, device)
-    if fc_overrides:
-        if not hasattr(scored, "with_focus_params"):
-            raise SystemExit("--fc needs a focus-context method config (e.g. configs/methods/pp3_scorer_fc.yaml).")
-        scored = scored.with_focus_params(**fc_overrides)
-    params = scored.base.params
+    config = load_yaml(PROJECT_ROOT / method_config)
+    if config.get("checkpoint") and not (PROJECT_ROOT / config["checkpoint"]).is_file():
+        # Before the score head of a new checkpoint is trained (ADR 0007): full and the
+        # training-free baselines still run, e.g. for a memory smoke test.
+        print(f"[warn] {config['checkpoint']} not found: only full and the training-free baselines are available.")
+        scored = top = nofold_scored = None
+        params = load_dsfold_params(PROJECT_ROOT / config["dsfold_params"])
+    else:
+        _, scored, _ = load_pruner(method_config, device)
+        if fc_overrides:
+            if not hasattr(scored, "with_focus_params"):
+                raise SystemExit("--fc needs a focus-context method config (e.g. configs/methods/pp3_scorer_fc.yaml).")
+            scored = scored.with_focus_params(**fc_overrides)
+        params = scored.base.params
     no_fold = params.with_overrides(gamma=0.0)
-    top = TopScorePruner(scored.head, params=no_fold, compressor=scored.compressor)
-    nofold_scored = copy.copy(scored)  # same selector, dropped tokens removed instead of folded
-    nofold_scored.base = DSFoldBase(no_fold)
+    if scored is not None:
+        top = TopScorePruner(scored.head, params=no_fold, compressor=scored.compressor)
+        nofold_scored = copy.copy(scored)  # same selector, dropped tokens removed instead of folded
+        nofold_scored.base = DSFoldBase(no_fold)
     divprune, fastv, cdpruner = DivPrunePruner(), FastVPruner(), CDPrunerPruner()
     runs = [
         ("full", "none", "full", "L7", None, NoOpPruner(), False),
@@ -118,7 +128,7 @@ def build_runs(method_config: str, tag: str, device: str, fc_overrides: dict[str
         runs.append((f"divprune_{level}", "pp3_scorer", "divprune", level, ratio, divprune, True))
         runs.append((f"fastv_{level}", "pp3_scorer", "fastv", level, ratio, fastv, True))
         runs.append((f"cdpruner_{level}", "pp3_scorer", "cdpruner", level, ratio, cdpruner, True))
-    return runs
+    return [run for run in runs if run[5] is not None]
 
 
 def main() -> None:
@@ -132,15 +142,18 @@ def main() -> None:
     parser.add_argument("--tag", default="3a", help="Name of the score head in run ids.")
     parser.add_argument("--only", nargs="+", default=None, help="Run only these configuration names.")
     parser.add_argument("--fc", default=None, help="Focus-context overrides, e.g. beta=2,share_max=0.9.")
+    parser.add_argument("--shuffle-order", type=int, default=None, metavar="SEED",
+                        help="Run the configurations of each sample in a random order (seeded by SEED and the "
+                             "sample id), so timing does not depend on the position in the sequence.")
     args = parser.parse_args()
 
     baseline = load_yaml(BASELINE_CONFIG)
-    model_config = baseline["model"]
-    runner = PrunedQwen3VL(
-        model_config["id"], dtype=model_config.get("dtype"), device_map=model_config.get("device_map", "auto"),
-        attn_implementation=model_config.get("attn_implementation"),
-        max_new_tokens=model_config.get("max_new_tokens", 32),
-    )
+    method_config = load_yaml(PROJECT_ROOT / args.method_config)
+    # The method config names the checkpoint (2B or 4B, ADR 0007); runs of a second
+    # checkpoint must use a prefix ending in its run_tag so they never overwrite 2B runs.
+    model_config = method_config.get("model") or baseline["model"]
+    check_run_prefix(model_config, baseline["model"], args.prefix)
+    runner = load_runner(model_config)
     runs = build_runs(args.method_config, args.tag, str(runner.device), parse_overrides(args.fc))
     if args.only:
         unknown = set(args.only) - {run[0] for run in runs}
@@ -150,7 +163,6 @@ def main() -> None:
     else:
         runs = [run for run in runs if not run[6]]
     suffix = dataset_suffix(args.source)
-    method_config = load_yaml(PROJECT_ROOT / args.method_config)
 
     paths, done = {}, {}
     for name, method_dir, *_ in runs:
@@ -177,7 +189,10 @@ def main() -> None:
             scoring_text = question_text_for_scoring(sample.question, sample.metadata.get("choices") or [])
             encoded = runner.encode(sample.image, sample.question, scoring_text)
             prepared_pruners: set[int] = set()
-            for name, _, variant, level, ratio, pruner, _ in runs:
+            order = list(runs)
+            if args.shuffle_order is not None:
+                random.Random(f"{args.shuffle_order}:{sample.sample_id}").shuffle(order)
+            for name, _, variant, level, ratio, pruner, _ in order:
                 if sample.sample_id in done[name]:
                     continue
                 if hasattr(pruner, "prepare_sample") and id(pruner) not in prepared_pruners:
@@ -215,6 +230,7 @@ def main() -> None:
             checkpoint=None if name in ("full",) or name.startswith(("random", "randdrop", "blind", "divprune", "fastv", "cdpruner"))
             else method_config.get("checkpoint"),
             model_id=model_config["id"],
+            model_revision=model_config.get("revision"),
             started_at=started_at,
             finished_at=utc_now(),
             rows=rows,

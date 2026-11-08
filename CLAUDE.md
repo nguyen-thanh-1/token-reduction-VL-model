@@ -56,7 +56,8 @@ download (data/raw/{GQA,MMB,MME}) -> preprocess (data/processed/v1/*.jsonl)
 
 - GQA: balanced configurations only; never add or fall back to `*_all_*`.
 - Split roles (`configs/data_v1.yaml`): train GQA train, tune GQA val, evaluate
-  GQA testdev + MMBench validation + MME test. GQA test and MMBench test are
+  GQA testdev + MMBench validation + MME test (+ POPE test and ScienceQA-IMG
+  test, ADR 0006). GQA test and MMBench test are
   inference-only — never report accuracy on them.
 - Never average GQA, MMBench, and MME accuracies; MME score is not a percentage.
 - Persisted data stays model-agnostic (no Qwen special tokens in JSONL).

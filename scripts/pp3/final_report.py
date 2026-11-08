@@ -51,6 +51,7 @@ def mme_scores(rows: list[dict]) -> tuple[float, float]:
 def quality_table(prefix: str, runs: list[str]) -> list[str]:
     header = [*(("MME perc.", "MME cogn.") if d == "mme" else (f"{d.upper()} acc", "diff (95% CI)")
                 for d, _ in BENCHMARKS)]
+    header += [("POPE F1", "POPE yes %") for d, _ in BENCHMARKS if d == "pope"]
     columns = [c for pair in header for c in pair]
     lines = ["| Run | K/N | " + " | ".join(columns) + " |", "|---|---|" + "---|" * len(columns)]
     loaded = {(name, d): read_jsonl(run_path(prefix, name, d, s)) if run_path(prefix, name, d, s).is_file() else None
@@ -74,8 +75,19 @@ def quality_table(prefix: str, runs: list[str]) -> list[str]:
                 continue
             ref = {r["sample_id"]: bool(score_prediction_record(r)) for r in full}
             ids = [i for i in ok if i in ref]
+            if len(ids) != len(ok) or len(ids) != len(ref):
+                print(f"WARNING: {name}/{dataset}: {len(ok)} rows vs {len(ref)} full rows; "
+                      f"diff uses the {len(ids)} shared ids, acc columns are not comparable", file=sys.stderr)
             _, _, d, lo, hi, _, _ = paired(ok, ref, ids)
             cells.append(f"{d:+.2f} [{lo:+.2f}, {hi:+.2f}]")
+        if any(d == "pope" for d, _ in BENCHMARKS):
+            rows = loaded[(name, "pope")]
+            if rows is None:
+                cells += ["-", "-"]
+            else:
+                pope = score_prediction_records(rows)
+                yes = statistics.mean(c["yes_ratio"] for c in pope["categories"].values())
+                cells += [f"{100 * pope['pope_mean_f1']:.2f}", f"{100 * yes:.1f}"]
         ratio = f"{statistics.mean(ratios):.3f}" if ratios else "-"
         lines.append(f"| {name} | {ratio} | " + " | ".join(cells) + " |")
     return lines
@@ -105,7 +117,8 @@ def main() -> None:
     parser.add_argument("--runs", nargs="+", required=True)
     parser.add_argument("--output", type=Path, default=None, help="Also write the tables to this Markdown file.")
     parser.add_argument("--benchmark", action="append", default=None,
-                        help="dataset:source to report instead of the three test sets, e.g. gqa:gqa_val_balanced.")
+                        help="dataset:source to report instead of the three test sets, e.g. gqa:gqa_val_balanced "
+                             "or pope:pope_test / sqa:sqa_img_test (ADR 0006).")
     args = parser.parse_args()
     global BENCHMARKS
     if args.benchmark:

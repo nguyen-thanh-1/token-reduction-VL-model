@@ -233,7 +233,9 @@ uv run python scripts/pp3/final_report.py --prefix timing --benchmark gqa:gqa_va
 
 ---
 
-## Bước 6 — Baseline CDPruner (sau phản biện, 04/11)
+## Bước 6 — Baseline CDPruner (sau phản biện, 04/11) — ĐÃ XONG
+
+Kết quả: `outputs/reports/pp3_final/tables_cdpruner.md`. PP3 hơn CDPruner ở mọi mức (GQA testdev +7,23 / +4,83 / +2,70 / +1,82 ở L1–L4, p<0,001). Trong cài đặt này CDPruner thấp hơn DivPrune; đã ghi vào Bảng III, ablation và hạn chế của paper.
 
 CDPruner (NeurIPS 2025) là công trình gần nhất: DPP có điều kiện theo câu hỏi,
 điểm liên quan thủ công. Cài ở `baselines.py` (`cdpruner_L1..L5`, ADR 0005).
@@ -288,3 +290,128 @@ thành `share_min: 0.25`, `share_max: 0.25`, `context_dpp: 1`. Ảnh lưu ở
 ```powershell
 uv run python scripts/common/interactive_pruned.py --method-config configs/methods/pp3_scorer_fc.yaml --level L4 --level L5
 ```
+
+---
+
+## Bước 7 — Bộ chọn nhanh (CUDA graph) — WP1 của `pp3-plan-second-call.md` — ĐÃ XONG (7b)
+
+> Kết quả 04/11: timing2 (xáo thứ tự) cho thấy tập token trùng `final` ở 2099/2100 cặp MME (7a không cần chạy riêng). MME, chọn + prefill: full 84,4 ms; PP3 L1 48,4 (1,75×), L3 55,3 (1,53×), L4 64,7 (1,31×). GQA: không phương pháp nào nhanh hơn full (prefill ~28–30 ms bất kể số token). Bất thường "L3 chậm hơn L4" biến mất. Đã đưa vào paper (Bảng tab:timing, Phụ lục app:flops).
+
+### 7a — Kiểm tra trùng kết quả (khoảng 20 phút; có thể chạy cùng việc khác)
+
+Chạy lại PP3 với code mới trên 300 câu MME (ảnh lớn, K lớn) và 2000 câu GQA
+testdev, rồi so tập token giữ lại với các lượt `final`.
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn50k.yaml --tag 3d_attn50k --source mme_test --split all --prefix parity --limit 300 --only 3d_attn50k_L3 3d_attn50k_L4 cdpruner_L3
+```
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn50k.yaml --tag 3d_attn50k --source gqa_testdev_balanced --split all --prefix parity --limit 2000 --only 3d_attn50k_L3 3d_attn50k_L4
+```
+
+```powershell
+uv run python scripts/pp3/compare_keep.py --new parity --source mme_test --dataset mme --runs 3d_attn50k_L3 3d_attn50k_L4 cdpruner_L3
+```
+
+```powershell
+uv run python scripts/pp3/compare_keep.py --new parity --source gqa_testdev_balanced --dataset gqa --runs 3d_attn50k_L3 3d_attn50k_L4
+```
+
+### 7b — Đo lại thời gian, xáo thứ tự (CHẠY MỘT MÌNH; GQA khoảng 30 phút, MME khoảng 1 giờ)
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn50k.yaml --tag 3d_attn50k --prefix timing2 --limit 300 --shuffle-order 0 --only full random_L3 divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn50k_L1 3d_attn50k_L3 3d_attn50k_L4
+```
+
+Sau khi lệnh trên xong:
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn50k.yaml --tag 3d_attn50k --source mme_test --split all --prefix timing2 --limit 300 --shuffle-order 0 --only full random_L3 divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn50k_L1 3d_attn50k_L3 3d_attn50k_L4
+```
+
+```powershell
+uv run python scripts/pp3/final_report.py --prefix timing2 --benchmark gqa:gqa_val_balanced --benchmark mme:mme_test --runs random_L3 divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn50k_L1 3d_attn50k_L3 3d_attn50k_L4
+```
+
+## Bước 8 — Mô hình thứ hai Qwen3-VL-4B (WP5, ADR 0007)
+
+Config: `configs/methods/pp3_scorer_attn_4b.yaml`. Mọi lượt chạy 4B dùng prefix
+kết thúc bằng `4b` (`smoke4b`, `final4b`); `run_diagnostics.py` từ chối prefix
+khác, nên không thể ghi đè kết quả 2B. **Mỗi lúc chỉ chạy một tiến trình có nạp
+LLM 4B** (khoảng 10–13 GB VRAM); riêng bước 8d (train) không nạp LLM.
+Thời gian ghi dưới đây là ước tính (khoảng 1,3–1,5× bản 2B); hãy báo lại it/s thật.
+
+### 8a — Tải trọng số (8,9 GB, revision cố định)
+
+```powershell
+uv run hf download Qwen/Qwen3-VL-4B-Instruct --revision ebb281ec70b05090aa6165b016eac8ec08e71b17
+```
+
+### 8b — Smoke test VRAM trên 20 câu MME có ảnh lớn nhất (khoảng 5 phút)
+
+Score head 4B chưa có, nên chỉ chạy full và các baseline không cần huấn luyện.
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn_4b.yaml --tag 3d_attn4b50k_rec --source mme_test --split configs/splits/mme_largest20.txt --prefix smoke4b --only full divprune_L3 cdpruner_L3
+```
+
+```powershell
+uv run python scripts/pp3/final_report.py --prefix smoke4b --benchmark mme:mme_test --runs divprune_L3 cdpruner_L3
+```
+
+Dán bảng Efficiency (cột peak VRAM) cho Claude. Nếu peak > 15 GB thì dừng ở đây.
+
+### 8c — PCA và nhãn teacher (PCA khoảng 10 phút; nhãn 20k khoảng 6–8 giờ, qua đêm)
+
+```powershell
+uv run python scripts/pp3/fit_compressor.py --config configs/methods/pp3_scorer_attn_4b.yaml
+```
+
+Thử 20 câu trước:
+
+```powershell
+uv run python scripts/pp3/make_attention_labels.py --config configs/methods/pp3_scorer_attn_4b.yaml --end 20
+```
+
+Rồi chạy đến 20k (tiếp tục được nếu bị ngắt; chạy lại đúng lệnh này):
+
+```powershell
+uv run python scripts/pp3/make_attention_labels.py --config configs/methods/pp3_scorer_attn_4b.yaml --end 20000
+```
+
+### 8d — Huấn luyện score head (không nạp LLM; khoảng 1–2 giờ)
+
+```powershell
+uv run python scripts/pp3/train_score_head.py --config configs/methods/pp3_scorer_attn_4b.yaml
+```
+
+### 8e — Đánh giá, đợt A (L1, L3; khoảng 30 giờ tổng, chạy lần lượt)
+
+Đợt A đủ cho bảng 4B trong paper. Mỗi lệnh có thể dừng và chạy lại (tiếp tục từ chỗ dừng).
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn_4b.yaml --tag 3d_attn4b50k_rec --source mmb_validation --split all --prefix final4b --only full divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3
+```
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn_4b.yaml --tag 3d_attn4b50k_rec --source gqa_testdev_balanced --split all --prefix final4b --only full divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3
+```
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn_4b.yaml --tag 3d_attn4b50k_rec --source pope_test --split all --prefix final4b --only full divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3
+```
+
+```powershell
+uv run python scripts/pp3/run_diagnostics.py --method-config configs/methods/pp3_scorer_attn_4b.yaml --tag 3d_attn4b50k_rec --source mme_test --split all --prefix final4b --only full divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3
+```
+
+> Head dùng cho test: `3d_attn4b50k_rec` (ADR 0007, Amendment 2). MMBench: full và baseline đã xong, chỉ chạy `3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3`.
+
+### 8f — Bảng (dán kết quả cho Claude)
+
+```powershell
+uv run python scripts/pp3/final_report.py --prefix final4b --benchmark gqa:gqa_testdev_balanced --benchmark mmb:mmb_validation --benchmark mme:mme_test --benchmark pope:pope_test --runs divprune_L1 divprune_L3 cdpruner_L1 cdpruner_L3 3d_attn4b50k_rec_L1 3d_attn4b50k_rec_L3
+```
+
+Đợt B (nếu còn thời gian): cùng các lệnh 8e với `--only divprune_L2 divprune_L4 cdpruner_L2 cdpruner_L4 3d_attn4b50k_rec_L2 3d_attn4b50k_rec_L4 random_L3`.

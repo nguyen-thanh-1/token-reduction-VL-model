@@ -126,7 +126,7 @@ class PrunedGeneration:
 
 
 class PrunedQwen3VL:
-    """Qwen3-VL-2B with a pluggable visual-token pruner between ViT and LLM."""
+    """Qwen3-VL (2B or 4B) with a pluggable visual-token pruner between ViT and LLM."""
 
     def __init__(
         self,
@@ -136,10 +136,13 @@ class PrunedQwen3VL:
         device_map: str | dict[str, Any] = "auto",
         attn_implementation: str | None = None,
         max_new_tokens: int = 32,
+        revision: str | None = None,
     ) -> None:
         from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
         model_kwargs: dict[str, Any] = {"device_map": device_map}
+        if revision:
+            model_kwargs["revision"] = revision
         if dtype:
             model_kwargs["dtype"] = dtype
         if attn_implementation:
@@ -147,7 +150,7 @@ class PrunedQwen3VL:
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(model_id, **model_kwargs)
         self.model.eval()
         self.model.requires_grad_(False)
-        self.processor = AutoProcessor.from_pretrained(model_id)
+        self.processor = AutoProcessor.from_pretrained(model_id, **({"revision": revision} if revision else {}))
         self.max_new_tokens = max_new_tokens
         self.image_token_id = int(self.model.config.image_token_id)
         eos = self.model.generation_config.eos_token_id
@@ -400,3 +403,34 @@ class PrunedQwen3VL:
         )
         hidden = out.last_hidden_state[0, prepared.seq_len - 1 : prepared.seq_len - 1 + num_answer]
         return self.model.lm_head(hidden).float()
+
+
+def load_runner(model: dict[str, Any], **overrides: Any) -> PrunedQwen3VL:
+    """Build the runner from a ``model:`` config block (id, revision, dtype, ...)."""
+
+    return PrunedQwen3VL(
+        model["id"],
+        dtype=model.get("dtype"),
+        device_map=model.get("device_map", "auto"),
+        attn_implementation=model.get("attn_implementation"),
+        max_new_tokens=model.get("max_new_tokens", 32),
+        revision=model.get("revision"),
+        **overrides,
+    )
+
+
+def check_run_prefix(model: dict[str, Any], reference: dict[str, Any], prefix: str) -> None:
+    """Keep runs of a second checkpoint out of the reference model's run directories.
+
+    A ``model`` block whose id differs from ``reference`` (the baseline model)
+    must carry ``run_tag``, and ``prefix`` must end with it (e.g. ``final4b``).
+    """
+
+    if model["id"] == reference["id"]:
+        return
+    tag = model.get("run_tag")
+    if not tag:
+        raise ValueError(f"model {model['id']!r} differs from the baseline model; set model.run_tag in the config.")
+    if not prefix.endswith(tag):
+        raise ValueError(f"model {model['id']!r} runs need a prefix ending in {tag!r} (got {prefix!r}), "
+                         f"e.g. final{tag}; otherwise they would overwrite the {reference['id']} runs.")

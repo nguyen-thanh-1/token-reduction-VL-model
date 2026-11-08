@@ -1,4 +1,4 @@
-# PP3: Chọn token thị giác theo câu hỏi bằng bộ chấm điểm học từ attention cho mô hình thị giác–ngôn ngữ DeepStack
+# Question-Aware Visual Token Selection with an Attention-Distilled Scorer for DeepStack Vision-Language Models
 
 **Nguyễn Thiện Thanh, Nguyễn Trung Hiếu, Gia Bảo**
 

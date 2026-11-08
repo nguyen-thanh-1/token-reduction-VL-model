@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from token_reduction_vl.pruning.pp3_scorer.data import SaliencyRecord, ShardWriter, load_records, stored_sample_ids
 from token_reduction_vl.pruning.pp3_scorer.plots import plot_history
@@ -45,3 +46,37 @@ def test_training_resumes_from_last_checkpoint_and_plots(tmp_path) -> None:
     assert [entry["epoch"] for entry in history] == [0, 1, 2]  # only epoch 2 was trained again
     assert (checkpoints / "score_head_3a_seed0.pt").exists()
     assert plot_history(logs / "history_3a_seed0.json").exists()
+
+
+def test_resume_from_another_run_with_recall_selection(tmp_path) -> None:
+    records = [make_record(index) for index in range(12)]
+    checkpoints, logs = tmp_path / "ckpt", tmp_path / "logs"
+    first = RouteBConfig(arch="3a", epochs=4, batch_size=4, patience=10, device="cpu", name="a")
+    train_route_b(records, (8, 4, 8), first, checkpoints, logs)
+    second = RouteBConfig(arch="3a", epochs=4, batch_size=4, patience=10, device="cpu", name="b", select_on="recall")
+    # The stored state is at the final epoch (3), so resuming trains nothing and only selects.
+    source = checkpoints / "score_head_a_seed0_last.pt"
+    import torch
+
+    state = torch.load(source, weights_only=False)
+    state["history"][-1]["recall_at_k_L3"] = 2.0  # make the stored last epoch the best by recall
+    torch.save(state, source)
+    train_route_b(records, (8, 4, 8), second, checkpoints, logs, resume_from=source)
+    assert (checkpoints / "score_head_b_seed0.pt").exists()  # saved from the stored last state
+    state["history"][-1]["recall_at_k_L3"] = -1.0  # best epoch earlier, no checkpoint of "b2" -> refuse
+    torch.save(state, source)
+    third = RouteBConfig(arch="3a", epochs=4, batch_size=4, patience=10, device="cpu", name="b2", select_on="recall")
+    with pytest.raises(ValueError, match="best epoch"):
+        train_route_b(records, (8, 4, 8), third, checkpoints, logs, resume_from=source)
+
+
+def test_2b_head_epoch_is_the_same_under_both_selection_rules() -> None:
+    from pathlib import Path
+
+    history_path = Path(__file__).resolve().parents[2] / "outputs" / "pp3_scorer" / "training" / "history_3d_attn50k_seed0.json"
+    if not history_path.exists():
+        pytest.skip("2B training history not present")
+    history = json.loads(history_path.read_text())
+    by_loss = min(history, key=lambda e: e["listnet"])["epoch"]
+    by_recall = max(history, key=lambda e: e["recall_at_k_L3"])["epoch"]
+    assert by_loss == by_recall

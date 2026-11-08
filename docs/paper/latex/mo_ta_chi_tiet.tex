@@ -1,0 +1,1049 @@
+% Mô tả chi tiết phương pháp DeSTiL (tài liệu giải thích nội bộ, không phải bản nộp).
+% Biên dịch bằng XeLaTeX (khuyến nghị, ví dụ trên Overleaf: Menu -> Compiler -> XeLaTeX):
+%   latexmk -xelatex mo_ta_chi_tiet.tex
+% pdfLaTeX cũng chạy được (nhánh T5 bên dưới).
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{iftex}
+\ifXeTeX
+  \usepackage{fontspec}
+  \setmainfont{TeX Gyre Termes}
+  \setmonofont{TeX Gyre Cursor}
+  \usepackage{polyglossia}
+  \setdefaultlanguage{vietnamese}
+\else\ifLuaTeX
+  \usepackage{fontspec}
+  \setmainfont{TeX Gyre Termes}
+  \setmonofont{TeX Gyre Cursor}
+  \usepackage[vietnamese]{babel}
+\else
+  \usepackage[T5]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage[vietnamese]{babel}
+\fi\fi
+
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,calc,fit}
+\usepackage[most]{tcolorbox}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+
+% ---------------------------------------------------------------- hộp màu
+\newtcolorbox{vidu}[1][]{breakable,enhanced,colback=green!4,colframe=green!45!black,
+  fonttitle=\bfseries,title={Ví dụ#1}}
+\newtcolorbox{trucgiac}[1][]{breakable,enhanced,colback=blue!4,colframe=blue!50!black,
+  fonttitle=\bfseries,title={Trực giác#1}}
+\newtcolorbox{visao}[1][]{breakable,enhanced,colback=violet!4,colframe=violet!55!black,
+  fonttitle=\bfseries,title={Vì sao làm vậy?#1}}
+\newtcolorbox{luuy}[1][]{breakable,enhanced,colback=orange!6,colframe=orange!75!black,
+  fonttitle=\bfseries,title={Lưu ý trung thực#1}}
+
+% ---------------------------------------------------------------- ký hiệu
+\newcommand{\qhat}{\hat{q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\softplus}{\operatorname{softplus}}
+\newcommand{\lse}{\operatorname{logsumexp}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+
+% màu dùng chung trong hình
+\colorlet{frozen}{blue!12}\colorlet{frozenB}{blue!55!black}
+\colorlet{learn}{violet!18}\colorlet{learnB}{violet!65!black}
+\colorlet{algo}{orange!18}\colorlet{algoB}{orange!80!black}
+
+\title{\textbf{DeSTiL}: mô tả chi tiết phương pháp\\[2pt]
+\large DeepStack Token selection via attention distiLlation trên Qwen3-VL-2B}
+\author{Tài liệu giải thích nội bộ}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Tài liệu này giải thích \emph{từng bước} của DeSTiL, kèm công thức, ý nghĩa của từng công thức, lý do thiết kế và ví dụ số cụ thể. Mục tiêu là đọc xong có thể tự giải thích lại toàn bộ phương pháp mà không cần mở code. Các đường dẫn file (ví dụ \file{models.py:114}) chỉ tới code trong \file{src/token\_reduction\_vl/pruning/pp3\_scorer/}. Trong các ví dụ, số thập phân được viết bằng dấu chấm cho dễ đọc cùng công thức, và các con số ví dụ được làm tròn, chỉ để minh họa.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ======================================================================
+\section{Bức tranh tổng thể}
+
+\subsection{Bài toán}
+Một mô hình thị giác--ngôn ngữ (VLM) như Qwen3-VL biến ảnh thành một dãy \emph{token ảnh}, ghép với câu hỏi, rồi cho LLM đọc cả dãy để sinh câu trả lời. Số token ảnh tăng theo độ phân giải: ảnh GQA cho khoảng 64--1200 token, ảnh MME có thể lên tới hơn 16\,000 token. Trong khi đó, một câu hỏi như ``Chiếc xe màu gì?'' thường chỉ cần vài vùng nhỏ của ảnh.
+
+\textbf{Mục tiêu:} trước khi LLM chạy, chỉ giữ lại $K$ trong $N$ token ảnh ($K\ll N$), sao cho câu trả lời gần như không đổi so với khi dùng đủ $N$ token.
+
+\begin{trucgiac}
+Chi phí của LLM ở bước đọc đầu vào (prefill) tăng theo độ dài chuỗi $T$: các phép chiếu và FFN tăng tuyến tính theo $T$, còn attention tăng theo $T^2$. Bộ nhớ KV cache cũng tăng theo $T$. Bỏ bớt token ảnh là cách trực tiếp nhất để giảm $T$. Theo kết quả trong paper, ở mức giữ 22\% token, chuỗi GQA trung bình giảm từ khoảng 294 xuống 86 token, còn MME từ khoảng 1790 xuống 425 token.
+\end{trucgiac}
+
+\subsection{Ý tưởng chính trong một câu}
+\begin{tcolorbox}[colback=yellow!8,colframe=yellow!50!black]
+Chạy mô hình đầy đủ trên dữ liệu huấn luyện để xem \textbf{LLM thực sự nhìn vào token ảnh nào} khi đọc câu hỏi và khi trả lời (attention). Sau đó dạy một mạng nhỏ (\emph{score head}, khoảng 2 triệu tham số) \textbf{đoán trước} bản đồ đó chỉ từ ảnh và câu hỏi. Lúc suy luận, dùng dự đoán này làm ``điểm chất lượng'' để chọn $K$ token vừa quan trọng vừa đa dạng (DPP), rồi đưa $K$ token đó cho LLM.
+\end{tcolorbox}
+
+\subsection{Sơ đồ luồng suy luận}
+Hình~\ref{fig:pipeline} là luồng xử lý cho \emph{một} cặp (ảnh, câu hỏi). Màu xanh là phần của Qwen3-VL (đóng băng, không sửa), màu tím là phần duy nhất được học (score head), màu cam là thuật toán cố định.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  node distance=5mm and 5mm,
+  box/.style={draw,rounded corners,align=center,minimum height=13mm,text width=25mm,font=\small},
+  frozen/.style={box,fill=frozen,draw=frozenB},
+  learn/.style={box,fill=learn,draw=learnB},
+  algo/.style={box,fill=algo,draw=algoB},
+  data/.style={box,fill=white,draw=gray},
+  arr/.style={-Stealth,thick}]
+  \node[data]   (in)   {\textbf{Đầu vào}\\ảnh + câu hỏi\\+ budget $r$};
+  \node[frozen, right=of in]  (proc) {\textbf{Processor}\\chia patch,\\tạo prompt};
+  \node[frozen, right=of proc] (vit) {\textbf{ViT} $\to v, f^{(1..3)}$\\\textbf{Embedding} $\to e$};
+  \node[algo,   right=of vit]  (s1)  {\textbf{S1} đặc trưng\\$u_i$ (467 số), $w$};
+  \node[learn,  right=of s1]   (s2)  {\textbf{S2} score head\\$\to s_i$};
+  \node[algo,   below=10mm of s2] (q)  {\textbf{Chất lượng}\\$\qhat_i=\softplus(s_i)$};
+  \node[algo,   left=of q]   (s3)  {\textbf{S3} DPP\\chọn $K=\lceil rN\rceil$};
+  \node[algo,   left=of s3]  (s4)  {\textbf{S4} fold\\DeepStack};
+  \node[frozen, left=of s4]  (llm) {\textbf{LLM Qwen3}\\28 lớp};
+  \node[data,   left=of llm] (out) {\textbf{Đầu ra}\\câu trả lời};
+  \draw[arr] (in)--(proc); \draw[arr] (proc)--(vit); \draw[arr] (vit)--(s1);
+  \draw[arr] (s1)--(s2); \draw[arr] (s2)--(q); \draw[arr] (q)--(s3);
+  \draw[arr] (s3)--node[above,font=\scriptsize]{giữ / bỏ}(s4);
+  \draw[arr] (s4)--node[above,font=\scriptsize]{$K$ token}(llm); \draw[arr] (llm)--(out);
+\end{tikzpicture}
+\caption{Luồng suy luận của DeSTiL. Chỉ khối tím (S2) có tham số được huấn luyện.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Ba giai đoạn của phương pháp}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Giai đoạn 0 --- fit PCA (một lần, không học bằng gradient).} Tìm các phép chiếu giảm chiều cố định cho đặc trưng ảnh và câu hỏi (Mục~\ref{sec:pca}).
+\item \textbf{Giai đoạn 1 --- tạo nhãn bằng attention teacher (offline, một lần).} Chạy Qwen3-VL đầy đủ trên 50\,000 câu hỏi GQA train để đọc attention, cho mỗi câu một nhãn $p$ (Mục~\ref{sec:teacher}).
+\item \textbf{Giai đoạn 2 --- huấn luyện score head (offline).} Dạy head dự đoán $p$ (Mục~\ref{sec:train}).
+\end{enumerate}
+Sau ba giai đoạn này, \textbf{suy luận} chỉ dùng S1--S4 và LLM; không cần đọc attention nữa.
+
+% ======================================================================
+\section{Nền tảng: Qwen3-VL biến ảnh thành token như thế nào}
+\label{sec:qwen}
+
+\subsection{Từ ảnh tới token ảnh}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Processor} đổi kích thước ảnh về bội số của 32 pixel, rồi cắt thành các \emph{patch} $16\times16$ pixel.
+\item \textbf{ViT} (24 lớp, độ rộng 1024) xử lý các patch.
+\item \textbf{PatchMerger} gộp mỗi khối $2\times2$ patch thành \emph{một} token. Vậy mỗi token ảnh ứng với một ô $32\times32$ pixel, và có vector $v_i\in\R^{2048}$ (đúng độ rộng của LLM).
+\end{enumerate}
+
+\begin{vidu}[: ảnh $448\times448$]
+$448/16=28$, nên có lưới $28\times28=784$ patch. Gộp $2\times2$ còn lưới $H'\times W'=14\times14$, tức $N=196$ token ảnh. Token thứ $j$ nằm ở hàng $\lfloor j/14\rfloor$, cột $j \bmod 14$ (thứ tự quét từng hàng). Ví dụ $j=49$ nằm ở hàng 3, cột 7.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.55]
+  \draw[fill=gray!10] (0,0) rectangle (4,4);
+  \node at (2,-0.6) {\small ảnh $448\times448$};
+  \draw[step=0.5,gray!60] (6,0) grid (10,4);
+  \node at (8,-0.6) {\small patch $16$ px};
+  \draw[step=1,blue!60!black,thick] (12,0) grid (16,4);
+  \fill[red!40] (13,2) rectangle (14,3);
+  \node at (14,-0.6) {\small token $=2\times2$ patch};
+  \draw[-Stealth,thick] (4.3,2)--(5.7,2);
+  \draw[-Stealth,thick] (10.3,2)--(11.7,2);
+\end{tikzpicture}
+\end{center}
+(Hình vẽ thu nhỏ: lưới thật là $28\times28$ patch và $14\times14$ token.)
+\end{vidu}
+
+\subsection{DeepStack: bốn luồng đặc trưng cho mỗi token}
+Ngoài luồng chính $v_i$ (ra ở lớp cuối ViT), Qwen3-VL còn lấy đặc trưng ở ba lớp \emph{giữa} của ViT (lớp 5, 11, 17), cũng gộp $2\times2$, được $f_i^{(1)},f_i^{(2)},f_i^{(3)}\in\R^{2048}$. Ba vector này được \textbf{cộng thẳng} vào hidden state của LLM tại đúng vị trí token ảnh, ở lớp 0, 1, 2 của LLM.
+
+\begin{trucgiac}
+Lớp ViT nông giữ chi tiết cục bộ (cạnh, kết cấu), lớp sâu giữ ngữ nghĩa (``đây là xe''). DeepStack cho LLM cả hai loại. Hệ quả cho bài toán chọn token: nếu bỏ token $i$, ta phải bỏ \emph{cả bốn luồng} của nó cho nhất quán. Đây là lý do có bước S4 (fold DeepStack).
+\end{trucgiac}
+
+\subsection{Phía câu hỏi và LLM}
+\begin{itemize}[leftmargin=*]
+\item Tokenizer biến prompt thành dãy ID. LLM tra \textbf{bảng embedding} \file{embed\_tokens} ($151\,936\times2048$, đóng băng) để đổi mỗi ID thành một vector.
+\item LLM là Qwen3: 28 lớp, độ rộng 2048, 16 head attention (dùng chung 8 KV head).
+\item Vị trí dùng \textbf{M-RoPE}: mỗi token ảnh mang tọa độ $(t,h,w)$. Khi bỏ token, token giữ lại vẫn mang \emph{tọa độ gốc} của nó, nên LLM vẫn biết nó nằm ở đâu trong ảnh.
+\end{itemize}
+
+\subsection{Budget $r$ và số token giữ lại $K$}
+Người dùng chọn một tỉ lệ giữ $r$. Số token giữ lại là
+\begin{equation}
+K=\min\!\big(N,\ \max(1,\ \lceil rN\rceil)\big).
+\end{equation}
+Năm mức dùng chung cho mọi phương pháp:
+
+\begin{center}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Mức & L1 & L2 & L3 & L4 & L5\\
+\midrule
+$r$ & $1/18$ & $1/9$ & $2/9$ & $1/3$ & $1/2$\\
+$K$ khi $N=196$ & $\lceil10.9\rceil=11$ & $\lceil21.8\rceil=22$ & $\lceil43.6\rceil=44$ & $\lceil65.3\rceil=66$ & $98$\\
+tỉ lệ thực & 5.6\% & 11.2\% & 22.4\% & 33.7\% & 50\%\\
+$\log r$ & $-2.890$ & $-2.197$ & $-1.504$ & $-1.099$ & $-0.693$\\
+\bottomrule
+\end{tabular}
+\end{center}
+Vì lấy trần, tỉ lệ thực cao hơn danh nghĩa một chút. Trên toàn GQA testdev, tỉ lệ thực là 5.7\%, 11.3\%, 22.4\%, 33.4\% cho L1--L4.
+
+% ======================================================================
+\section{S1 --- Đặc trưng cho mỗi token (không học)}
+\label{sec:s1}
+
+S1 chuẩn bị ``hồ sơ'' cho mỗi token ảnh để score head đọc. Mọi thứ ở S1 là công thức cố định, không có tham số học.
+
+\subsection{Embedding câu hỏi $e$}
+\label{sec:question}
+\begin{enumerate}[leftmargin=*]
+\item Lấy \textbf{văn bản để chấm điểm}: câu hỏi và nội dung các lựa chọn (nếu là trắc nghiệm). \emph{Không} gồm gợi ý, chữ ``Options:'' hay câu lệnh kiểu ``Answer with a short phrase''.
+\item Gọi tokenizer \emph{riêng} trên văn bản này (không thêm token đặc biệt), được \file{question\_ids}. Đây là dãy ID khác với dãy ID của toàn prompt.
+\item Bỏ các \textbf{từ dừng} (the, a, is, what, of, \dots, dấu câu).
+\item Tra bảng embedding của LLM, được $e_j\in\R^{2048}$, $j=1..N_q$.
+\end{enumerate}
+
+\begin{vidu}
+``What color is the car?'' $\to$ token \{What, color, is, the, car, ?\} $\to$ bỏ từ dừng còn \{color, car\} $\to$ $e=[e_\text{color};e_\text{car}]\in\R^{2\times2048}$.
+\end{vidu}
+
+\begin{trucgiac}
+Bảng embedding là phép \emph{tra bảng}: mỗi ID luôn cho cùng một vector, không phụ thuộc ngữ cảnh. Vì vậy tra riêng câu hỏi cho kết quả \emph{giống hệt} các hàng tương ứng khi tra cả prompt. Ta không cần chạy LLM để có $e$.
+\end{trucgiac}
+
+\subsection{Hai điểm thủ công của DSFold: $z_\text{rel}$ và $z_\text{ms}$}
+Đây là hai ``gợi ý'' (prior) kế thừa từ phương pháp DSFold (\file{dsfold\_base/scoring.py:80}). Mỗi token có đúng hai con số.
+
+\paragraph{Điểm liên quan tới câu hỏi.}
+\begin{equation}
+\mathrm{rel}_i=\max_{j}\cos(v_i,e_j),\qquad \cos(a,b)=\frac{a^\top b}{\|a\|\,\|b\|}.
+\end{equation}
+\emph{Đọc là:} token $i$ giống từ nào trong câu hỏi nhất, và giống tới đâu. Lấy $\max$ vì chỉ cần token khớp mạnh với \emph{một} từ (``car'') là đủ liên quan.
+
+\paragraph{Điểm khác biệt giữa các tầng DeepStack.}
+Trước hết chuẩn hóa từng tầng: $\hat f^{(l)}=(f^{(l)}-\text{trung bình theo token})/\text{độ lệch chuẩn của cả tầng}$. Sau đó
+\begin{equation}
+\mathrm{ms}_i=\big\|\hat f_i^{(3)}-\hat f_i^{(2)}\big\|+\big\|\hat f_i^{(2)}-\hat f_i^{(1)}\big\|.
+\end{equation}
+\emph{Đọc là:} biểu diễn của token thay đổi bao nhiêu khi đi sâu qua ViT. Vùng phẳng (bầu trời) thay đổi ít; vùng nhiều chi tiết (cạnh vật, chữ) thay đổi nhiều.
+
+\paragraph{Chuẩn hóa z-score và cắt.}
+Hai điểm thô có thang đo khác nhau giữa các ảnh, nên được đổi về z-score \emph{trong cùng ảnh} rồi cắt ở $\pm3$:
+\begin{equation}
+z_i=\operatorname{clip}\!\Big(\frac{x_i-\mu}{\sigma},\,-3,\,3\Big),\quad \mu=\tfrac1N\textstyle\sum_i x_i,\ \sigma=\sqrt{\tfrac1N\sum_i(x_i-\mu)^2}.
+\end{equation}
+
+\begin{vidu}[: z-score của rel với 4 token]
+Ảnh có 4 token (trời, xe, đường, cây), $\mathrm{rel}=(0.10,\,0.45,\,0.20,\,0.05)$.
+\begin{itemize}
+\item $\mu=0.20$; độ lệch $=(-0.10,\,0.25,\,0,\,-0.15)$; $\sigma=\sqrt{(0.01+0.0625+0+0.0225)/4}=0.154$.
+\item $z_\text{rel}=(-0.65,\,1.62,\,0,\,-0.97)$.
+\end{itemize}
+Token ``xe'' nổi bật nhất. z-score chỉ nói token \emph{đứng ở đâu so với các token khác trong cùng ảnh}, không phụ thuộc thang đo tuyệt đối. Việc cắt ở $\pm3$ ngăn một token ngoại lai làm lệch đầu vào của head.
+\end{vidu}
+
+\begin{luuy}
+$z_\text{rel}$ và $z_\text{ms}$ là các prior thủ công. Chưa có ablation bỏ riêng từng điểm khỏi $u_i$, nên không nên khẳng định chúng là thành phần then chốt. Head được tự do dùng hoặc bỏ qua chúng.
+\end{luuy}
+
+\subsection{PCA cố định}
+\label{sec:pca}
+Huấn luyện head cần lưu đặc trưng của 50\,000 mẫu. Lưu nguyên $v$ và ba tầng DeepStack (mỗi cái 2048 số mỗi token) sẽ tốn khoảng 220~GB. Vì vậy dùng PCA để giảm chiều trước khi lưu:
+\begin{equation}
+\mathrm{PCA}(x)=(x-m)\,C,\qquad C\in\R^{2048\times d}.
+\end{equation}
+\begin{itemize}[leftmargin=*]
+\item $v$ (đã chuẩn hóa độ dài 1) $\to$ $d=256$; mỗi tầng $\hat f^{(l)}$ $\to$ $d=64$; mỗi từ câu hỏi (độ dài 1) $\to$ $d=256$.
+\item $m$ và $C$ được tính \textbf{một lần} trên 1000 mẫu train đầu tiên (SVD), rồi \textbf{cố định}: dùng y hệt khi tạo nhãn, khi huấn luyện và khi suy luận.
+\end{itemize}
+
+\begin{trucgiac}
+PCA tìm các ``hướng'' trong không gian 2048 chiều mà dữ liệu biến thiên nhiều nhất, rồi chỉ giữ tọa độ theo $d$ hướng đầu. Giống như mô tả vị trí một người bằng (kinh độ, vĩ độ) và bỏ độ cao khi độ cao gần như không đổi: mất rất ít thông tin.
+\end{trucgiac}
+
+\begin{luuy}
+Con số 256/64 là lựa chọn thiết kế theo ngân sách lưu trữ (DeepStack có ba tầng nên mỗi tầng được ít chiều hơn), chưa được dò tối ưu.
+\end{luuy}
+
+\subsection{Mã hóa vị trí 2D (Fourier)}
+Head cần biết token nằm ở đâu trên lưới, vì (i) self-attention trong head không tự biết vị trí, và (ii) vị trí là thông tin có ích (vật thể thường liền khối). Với token ở hàng $a$, cột $b$ trên lưới $H'\times W'$, đặt $y=a/H'$, $x=b/W'$ trong $[0,1)$, và
+\begin{equation}
+\mathrm{PE}_i=\big[\sin(2^k\pi y),\ \cos(2^k\pi y),\ \sin(2^k\pi x),\ \cos(2^k\pi x)\big]_{k=0,1,2,3}\in\R^{16}.
+\end{equation}
+
+\begin{vidu}[: token $j=49$ trên lưới $14\times14$]
+Hàng 3, cột 7 nên $y=3/14=0.214$, $x=7/14=0.5$.
+\begin{center}
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+$k$ & $\sin(2^k\pi y)$ & $\cos(2^k\pi y)$ & $\sin(2^k\pi x)$ & $\cos(2^k\pi x)$\\
+\midrule
+0 & 0.623 & 0.782 & 1 & 0\\
+1 & 0.975 & 0.223 & 0 & $-1$\\
+2 & 0.434 & $-0.901$ & 0 & 1\\
+3 & $-0.782$ & 0.623 & 0 & 1\\
+\bottomrule
+\end{tabular}
+\end{center}
+Tần số thấp ($k=0$) mã hóa ``nửa trên hay nửa dưới''; tần số cao ($k=3$) phân biệt các ô gần nhau. Kết hợp lại, mỗi ô có một ``chữ ký'' riêng, và hai ô gần nhau có chữ ký gần nhau.
+\end{vidu}
+
+\begin{visao}
+Dùng $\sin/\cos$ thay vì đưa thẳng $(a,b)$ vì: (i) giá trị luôn nằm trong $[-1,1]$, không phụ thuộc kích thước ảnh; (ii) nhiều tần số giúp mạng nhỏ dễ học các quan hệ vị trí phi tuyến. Đây là ``PE 2D'' cố định, khác với mã hóa vị trí \emph{học được} của các từ câu hỏi bên trong head (Mục~\ref{sec:s2}).
+\end{visao}
+
+\subsection{Budget $\log r$}
+Mỗi token nhận thêm số $\log r$ (bảng ở Mục~\ref{sec:qwen}). Ý định ban đầu: khi $K$ rất nhỏ, chỉ nên giữ token của vật chính; khi $K$ lớn, token ngữ cảnh cũng có ích. Dùng $\log$ vì các mức $r$ cách nhau theo \emph{tỉ lệ} (gấp đôi, gấp ba), và $\log$ biến chúng thành các khoảng đều nhau, nằm trong khoảng nhỏ $[-2.9,-0.7]$.
+
+\begin{luuy}
+Khi huấn luyện, $r$ được bốc ngẫu nhiên cho mỗi mẫu, nhưng \textbf{nhãn $p$ không phụ thuộc $r$}. Head vì vậy không có lý do để dùng $\log r$, và nhiều khả năng bỏ qua nó. Không nên viết rằng head ``thích nghi theo budget''.
+\end{luuy}
+
+\subsection{Ghép lại: $u_i$ và $w$}
+Bên trong head, các phần sau PCA đi qua một phép chiếu Linear học được (giữ nguyên số chiều), rồi được ghép:
+\begin{equation}
+u_i=\big[\,\underbrace{P_v v_i}_{256};\ \underbrace{P_1 f_i^{(1)};P_2 f_i^{(2)};P_3 f_i^{(3)}}_{3\times64};\ \underbrace{z_{\text{rel},i};z_{\text{ms},i}}_{2};\ \underbrace{\mathrm{PE}_i}_{16};\ \underbrace{\log r}_{1}\,\big]\in\R^{467}.
+\end{equation}
+Câu hỏi cho $w=P_q\,\mathrm{PCA}(e)\in\R^{N_q\times256}$.
+
+\paragraph{$u_i$ là tensor thật, không chỉ là ký hiệu.} Trong code (\file{models.py:29--36}, \file{TokenEncoder.forward}), $u$ là một tensor kích thước $N\times467$:
+\begin{center}
+\begin{minipage}{0.85\linewidth}
+\small
+\begin{verbatim}
+pv     = proj_v(v)                         # 256 (Linear hoc duoc tren PCA(v))
+levels = [proj(f) for proj, f in ...]      # 3 x 64
+u = cat([pv, *levels, z_rel, z_ms, PE, log_r])   # [N x 467]
+h = Linear(467 -> 256)(u)                  # buoc dau tien cua score head
+\end{verbatim}
+\end{minipage}
+\end{center}
+
+\paragraph{Ý nghĩa của $u_i$: ``hồ sơ'' của token ảnh thứ $i$.} $u_i$ gom tất cả những gì head biết về \emph{riêng} token $i$, \emph{trước khi} nhìn các token khác hay câu hỏi:
+\begin{center}
+\begin{tabular}{@{}lp{9.5cm}@{}}
+\toprule
+Phần của $u_i$ & Trả lời câu hỏi\\
+\midrule
+$v$ (256) & Token này \textbf{chứa gì}? (ngữ nghĩa: xe, trời, đường)\\
+$f^{(1..3)}$ ($3\times64$) & Ở các mức chi tiết khác nhau trông \textbf{thế nào}? (cạnh, kết cấu, rồi ngữ nghĩa)\\
+$z_\text{rel}$, $z_\text{ms}$ (2) & Gợi ý thủ công: \textbf{giống câu hỏi} tới đâu, \textbf{nhiều chi tiết} tới đâu?\\
+PE (16) & Token \textbf{nằm ở đâu} trên ảnh?\\
+$\log r$ (1) & Lần này được \textbf{giữ bao nhiêu} token?\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{trucgiac}
+Mỗi token ảnh ``nộp một tờ khai'' 467 ô. Các khối tiếp theo của head (self-attention, cross-attention, FFN) đọc các tờ khai này, so chúng với nhau và với câu hỏi, rồi chấm điểm $s_i$. Tương tự, $w$ là ``hồ sơ'' của từng từ trong câu hỏi: $N_q$ vector 256 chiều, trong code là \file{q\_tokens = proj\_q(PCA(e))}.
+\end{trucgiac}
+
+\paragraph{$u_i$ thuộc S1 hay S2?} Chính xác thì $u_i$ nằm ở \textbf{ranh giới giữa S1 và S2}:
+\begin{itemize}[leftmargin=*]
+\item Các phần \textbf{cố định} (PCA, $z_\text{rel}$, $z_\text{ms}$, PE, $\log r$) được tính ở S1 và lưu trong shard (trừ PE và $\log r$, được tính lại khi đọc mẫu).
+\item Các phép chiếu Linear \textbf{học được} ($P_v$, $P_1..P_3$, $P_q$) và bước \textbf{ghép} thành 467 số nằm trong head.
+\end{itemize}
+Trong hình kiến trúc, vẽ $u_i$ và $w$ là đầu ra của S1 là một chỗ \emph{đơn giản hóa} chấp nhận được: các phép chiếu đó chỉ là Linear $256\to256$ và $64\to64$, không đổi số chiều, nên bỏ qua chúng không làm sai luồng thông tin.
+
+% ======================================================================
+\section{S2 --- Score head (thành phần duy nhất được học)}
+\label{sec:s2}
+
+Head (kiến trúc \texttt{3d}, lớp \file{ScoreTextGuided}, \file{models.py:114}) nhận $\{u_i\}_{i=1}^N$ và $w$, trả về một điểm thô $s_i\in\R$ cho mỗi token. Tổng số tham số là 1\,993\,153.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  node distance=4mm and 6mm,
+  b/.style={draw,rounded corners,fill=learn,draw=learnB,align=center,font=\small,minimum height=8mm,text width=30mm},
+  arr/.style={-Stealth,thick}]
+  \node[b] (lin) {Linear $467\to256$};
+  \node[b, below=of lin] (sa) {Self-attention\\(token ảnh $\leftrightarrow$ token ảnh)};
+  \node[b, below=of sa] (ca) {Cross-attention\\(token ảnh $\to$ từ)};
+  \node[b, below=of ca] (ffn) {FFN $256\to1024\to256$};
+  \node[b, below left=6mm and -8mm of ffn] (a) {$a_i=\mathrm{Linear}(h_i)$};
+  \node[b, below right=6mm and -8mm of ffn] (bb) {$b_i$ = khớp từ};
+  \node[draw,circle,below=18mm of ffn,inner sep=1pt] (plus) {$+$};
+  \node[below=3mm of plus] (s) {$s_i$};
+  \node[b, right=14mm of sa] (pe) {$w$ + vị trí từ (học)};
+  \node[b, below=of pe] (tt) {Text transformer\\(1 lớp) $\to\tilde w$};
+  \node[above=3mm of lin] (u) {$u_i$};
+  \node[above=3mm of pe] (w) {$w$};
+  \draw[arr] (u)--(lin); \draw[arr] (lin)--(sa); \draw[arr] (sa)--(ca); \draw[arr] (ca)--(ffn);
+  \draw[arr] (ffn)--(a); \draw[arr] (ffn)--(bb); \draw[arr] (a)--(plus); \draw[arr] (bb)--(plus); \draw[arr] (plus)--(s);
+  \draw[arr] (w)--(pe); \draw[arr] (pe)--(tt); \draw[arr] (tt)--(ca);
+  \draw[arr] (tt.east) -| ++(4mm,-30mm) |- (bb.east);
+\end{tikzpicture}
+\caption{Score head \texttt{3d}. Mỗi khối attention/FFN có LayerNorm trước và cộng phần dư (residual).}
+\end{figure}
+
+\subsection{Bước 1: chiếu về 256 chiều}
+$h_i^{(0)}=W_\text{in}u_i+b_\text{in}\in\R^{256}$. Đây là lớp tuyến tính đơn giản, đưa mọi thành phần của $u_i$ về một không gian chung để các khối sau xử lý.
+
+\subsection{Bước 2: self-attention giữa các token ảnh}
+\begin{equation}
+H\leftarrow H+\mathrm{MHA}\big(\mathrm{LN}(H),\mathrm{LN}(H),\mathrm{LN}(H)\big),
+\end{equation}
+với $\mathrm{MHA}$ là multi-head attention (4 head, mỗi head 64 chiều):
+\begin{equation}
+\mathrm{Attn}(Q,K,V)=\softmax\!\Big(\frac{QK^\top}{\sqrt{64}}\Big)V,\quad Q=XW_Q,\ K=XW_K,\ V=XW_V.
+\end{equation}
+LN là LayerNorm (đưa mỗi vector về trung bình 0, phương sai 1, rồi co giãn bằng tham số học).
+
+\begin{trucgiac}
+Mỗi token ``hỏi'' tất cả token khác và lấy thông tin có trọng số. Sau bước này, một token thuộc chiếc xe biết rằng các ô bên cạnh cũng là xe, và token bầu trời biết nó nằm trong một vùng trời lớn. Nhờ đó điểm của một token phụ thuộc vào \emph{ngữ cảnh toàn ảnh}, không chỉ vào chính nó. Phần cộng ``$H+\dots$'' (residual) giữ lại thông tin cũ và giúp huấn luyện ổn định.
+\end{trucgiac}
+
+\subsection{Bước 3: mã hóa câu hỏi}
+Embedding từ là tĩnh (không biết ngữ cảnh), nên trước hết cộng thêm \textbf{vị trí từ học được} $\pi_j$ (bảng 64 vị trí, tối đa 64 từ), rồi qua \emph{một} lớp Transformer encoder (4 head, FFN 512):
+\begin{equation}
+\tilde w=\mathrm{TransformerLayer}\big([\,w_1+\pi_1;\ \dots;\ w_{N_q}+\pi_{N_q}\,]\big).
+\end{equation}
+\begin{trucgiac}
+Sau bước này, vector của ``car'' trong ``color of the car'' khác với ``car'' trong ``is there a car''. Mỗi từ đã ``biết'' các từ xung quanh và vai trò của nó trong câu.
+\end{trucgiac}
+
+\subsection{Bước 4: cross-attention từ token ảnh tới từ}
+\begin{equation}
+H\leftarrow H+\mathrm{MHA}\big(\mathrm{LN}(H),\ \tilde w,\ \tilde w\big).
+\end{equation}
+Query là token ảnh, key và value là các từ. Mỗi token ảnh lấy thông tin từ những từ liên quan tới nó: token ``xe'' kéo thông tin từ ``car'' và ``color''. Đây là chỗ câu hỏi \emph{điều kiện hóa} điểm của token.
+
+\subsection{Bước 5: FFN}
+$H\leftarrow H+\mathrm{FFN}(\mathrm{LN}(H))$, với $\mathrm{FFN}(x)=W_2\,\mathrm{GELU}(W_1x)$, $W_1:256\to1024$, $W_2:1024\to256$. Sau đó áp LayerNorm cuối, được $h_i$. FFN biến đổi phi tuyến từng token độc lập, ``tiêu hóa'' thông tin vừa gom được.
+
+\subsection{Bước 6: hai điểm và tổng}
+\paragraph{Điểm chung} $a_i=w_o^\top h_i+b_o$: ``token này quan trọng tới đâu nói chung''.
+
+\paragraph{Điểm khớp từ}
+\begin{equation}
+b_i=\lse_{j}\ \frac{\langle W_k h_i,\ W_q\tilde w_j\rangle}{\sqrt{256}},\qquad \lse_j(c_j)=\log\sum_j e^{c_j}.
+\end{equation}
+\emph{Đọc là:} so token $i$ với từng từ $j$ bằng tích vô hướng (sau hai phép chiếu học được), rồi lấy một kiểu ``max mềm''.
+
+\begin{vidu}[: logsumexp là ``max mềm'']
+Token ``xe'' có điểm so với các từ: color $=1.0$, car $=4.0$, ``?'' $=0.5$.
+\[
+\lse=\log(e^{1}+e^{4}+e^{0.5})=4+\log(1+e^{-3}+e^{-3.5})=4+\log(1.080)=4.077.
+\]
+Kết quả gần bằng $\max=4$, nhưng khác $\max$ ở chỗ (i) có đạo hàm tới \emph{mọi} từ, nên huấn luyện mượt, và (ii) nếu token khớp với nhiều từ thì điểm cao hơn một chút.
+\end{vidu}
+
+\paragraph{Điểm cuối} $s_i=a_i+b_i$.
+
+\begin{visao}
+$a_i$ học ``tầm quan trọng chung'' (vật nổi bật, vùng có nội dung). $b_i$ là đường tắt rõ ràng cho câu hỏi: token xếp hạng cao nếu \emph{có ít nhất một từ} chỉ thẳng vào nó.
+\end{visao}
+
+\begin{luuy}
+Paper có so sánh ba kiến trúc (MLP \texttt{3a}, attention \texttt{3c}, \texttt{3d}), nhưng các so sánh hiện có đổi \emph{cả} nguồn nhãn (gradient hay attention) lẫn kiến trúc, nên chưa tách được riêng đóng góp của text transformer và $b_i$.
+\end{luuy}
+
+\begin{luuy}
+Head chỉ đọc 64 từ đầu tiên của câu hỏi. Khoảng 17\% câu MMBench (kèm lựa chọn) dài hơn và bị cắt trong head; $z_\text{rel}$ vẫn dùng toàn bộ câu. Nếu câu hỏi không còn từ nào sau khi bỏ từ dừng, head bỏ qua bước 3, 4 và $b_i$, chỉ trả về $a_i$.
+\end{luuy}
+
+% ======================================================================
+\section{Từ điểm thô tới chất lượng: softplus}
+DPP ở bước sau cần một \emph{trọng số dương} cho mỗi token. Điểm $s_i$ có thể âm, nên đổi bằng
+\begin{equation}
+\qhat_i=\softplus(s_i)+10^{-3},\qquad \softplus(x)=\log(1+e^{x}).
+\end{equation}
+
+\begin{vidu}
+\begin{center}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+$s_i$ & $-5$ & $-2$ & $0$ & $3$ & $10$\\
+$\softplus(s_i)$ & 0.0067 & 0.127 & 0.693 & 3.049 & 10.00005\\
+\bottomrule
+\end{tabular}
+\end{center}
+Khi $s$ âm nhiều, softplus gần 0 nhưng không bao giờ bằng 0. Khi $s$ dương lớn, softplus $\approx s$. Hàm này \textbf{đơn điệu tăng}, nên thứ tự các token được giữ nguyên. Hằng số $10^{-3}$ đảm bảo $\qhat_i>0$ tuyệt đối.
+\end{vidu}
+
+\begin{trucgiac}
+Có thể hình dung softplus là phiên bản ``mượt'' của $\max(0,x)$ (ReLU). So với $e^{x}$, softplus không làm bùng nổ các điểm lớn, nên một token có điểm rất cao không ``nuốt'' hết phần đa dạng trong DPP.
+\end{trucgiac}
+Lúc huấn luyện, điểm $s$ đi qua softmax chứ không qua softplus. Lý do dùng hai hàm khác nhau, kèm ví dụ số, nằm ở phần ``Vì sao huấn luyện dùng softmax nhưng suy luận dùng softplus'' trong Mục~\ref{sec:trainall}.
+
+% ======================================================================
+\section{S3 --- Chọn $K$ token bằng DPP}
+\label{sec:dpp}
+
+\subsection{Vì sao không chọn $K$ token điểm cao nhất?}
+Nếu chỉ lấy top-$K$ theo $\qhat$, ta thường chọn $K$ token \emph{gần giống hệt nhau} trong cùng một vùng (ví dụ cả 4 ô của chiếc xe), trong khi bỏ sót vùng khác cũng cần cho câu trả lời. Ta muốn một tập vừa \textbf{chất lượng cao} vừa \textbf{đa dạng}.
+
+\subsection{Kernel DPP và ý nghĩa định thức}
+Đặt $S_{ij}=\cos(v_i,v_j)$ (độ giống giữa hai token, dùng $v$ gốc 2048 chiều) và
+\begin{equation}
+\Lambda=\mathrm{diag}(\qhat)\,S\,\mathrm{diag}(\qhat),\qquad \Lambda_{ij}=\qhat_i\,S_{ij}\,\qhat_j.
+\end{equation}
+DPP (Determinantal Point Process) chấm điểm một tập $Y$ bằng $\det\Lambda_Y$ (ma trận con theo các hàng, cột thuộc $Y$). Ta cần tìm
+\begin{equation}
+Y^\star=\arg\max_{|Y|=K}\ \log\det\Lambda_Y.
+\end{equation}
+Tách ra:
+\begin{equation}
+\log\det\Lambda_Y=\underbrace{2\sum_{i\in Y}\log\qhat_i}_{\text{chất lượng}}+\underbrace{\log\det S_Y}_{\text{đa dạng}}.
+\end{equation}
+Phần đầu thưởng token điểm cao. Phần sau là \emph{bình phương thể tích} của khối tạo bởi các vector $v_i$ (độ dài 1) trong $Y$: các vector càng khác hướng thì thể tích càng lớn; hai vector gần trùng nhau thì thể tích gần 0.
+
+\begin{vidu}[: hai token]
+Với $Y=\{a,b\}$: $\det\Lambda_Y=\qhat_a^2\qhat_b^2\,(1-S_{ab}^2)$.
+\begin{itemize}
+\item A, B là hai ô của cùng chiếc xe: $\qhat_A=2,\ \qhat_B=1.9,\ S_{AB}=0.95$ cho $\det=4\cdot3.61\cdot0.0975=1.41$.
+\item A và C (một ô đường, khác hẳn xe): $\qhat_C=1,\ S_{AC}=0.1$ cho $\det=4\cdot1\cdot0.99=3.96$.
+\end{itemize}
+Dù C có chất lượng thấp hơn B nhiều, cặp $\{A,C\}$ vẫn được ưa hơn $\{A,B\}$, vì B gần như lặp lại thông tin của A.
+
+\begin{center}
+\begin{tikzpicture}[scale=1.6]
+  \draw[-Stealth,thick,red!70!black] (0,0)--(2,0.3) node[right]{$\qhat_A v_A$};
+  \draw[-Stealth,thick,red!40] (0,0)--(1.85,0.65) node[right]{$\qhat_B v_B$};
+  \fill[red!15,opacity=0.7] (0,0)--(2,0.3)--(3.85,0.95)--(1.85,0.65)--cycle;
+  \node[font=\small] at (1.9,-0.35) {$\{A,B\}$: hình bình hành dẹt, diện tích nhỏ};
+  \begin{scope}[xshift=4.6cm]
+  \draw[-Stealth,thick,red!70!black] (0,0)--(2,0.3) node[right]{$\qhat_A v_A$};
+  \draw[-Stealth,thick,blue!60!black] (0,0)--(0.25,1) node[above]{$\qhat_C v_C$};
+  \fill[blue!12,opacity=0.7] (0,0)--(2,0.3)--(2.25,1.3)--(0.25,1)--cycle;
+  \node[font=\small] at (1.1,-0.35) {$\{A,C\}$: diện tích lớn};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\end{vidu}
+
+\subsection{Thuật toán tham lam (greedy MAP)}
+Tìm $Y^\star$ chính xác là bài toán NP-khó, nên dùng cách tham lam (Chen và cộng sự, 2018): bắt đầu từ tập rỗng, mỗi bước thêm token làm $\log\det$ tăng nhiều nhất. Mức tăng khi thêm token $i$ vào tập $Y$ hiện tại là
+\begin{equation}
+d_i^2=\Lambda_{ii}-\|c_i\|^2,
+\end{equation}
+trong đó $c_i$ là phần của token $i$ đã được ``giải thích'' bởi các token đã chọn (phân rã Cholesky tăng dần). Khởi đầu $d_i^2=\qhat_i^2$. Sau khi chọn token $j$, mọi token được cập nhật
+\begin{equation}
+e_i=\frac{\Lambda_{ji}-\langle c_j,c_i\rangle}{d_j},\qquad c_i\leftarrow[c_i;e_i],\qquad d_i^2\leftarrow d_i^2-e_i^2.
+\end{equation}
+Bước tiếp theo chọn $j=\arg\max_{i\notin Y}d_i^2$. Độ phức tạp là $O(NK^2)$.
+
+\begin{vidu}[: ba token A, B, C, chọn $K=2$]
+Dùng số ở ví dụ trên, thêm $S_{BC}=0.1$.
+\begin{enumerate}
+\item Khởi đầu $d^2=(\qhat_A^2,\qhat_B^2,\qhat_C^2)=(4,\ 3.61,\ 1)$. Chọn \textbf{A}.
+\item Cập nhật theo A ($c$ đang rỗng): $e_i=\Lambda_{Ai}/d_A=\qhat_A\qhat_iS_{Ai}/\qhat_A=\qhat_iS_{Ai}$.
+  \begin{itemize}
+  \item $e_B=1.9\cdot0.95=1.805$, nên $d_B^2=3.61-3.258=0.352$.
+  \item $e_C=1\cdot0.1=0.1$, nên $d_C^2=1-0.01=0.99$.
+  \end{itemize}
+\item Chọn \textbf{C} ($0.99>0.352$), dù $\qhat_C<\qhat_B$.
+\end{enumerate}
+Ý nghĩa của $d_i^2$: ``phần \emph{mới} mà token $i$ còn mang lại sau khi đã có các token đã chọn''. B gần như trùng A nên phần mới chỉ còn $0.352$.
+\end{vidu}
+
+\paragraph{Quy tắc dừng.} Nếu mức tăng lớn nhất nhỏ hơn $10^{-6}$ (mọi token còn lại đều đã ``bị giải thích hết''), các vị trí còn trống được lấp bằng các token có $\qhat$ cao nhất chưa chọn.
+
+\subsection{Ảnh rất lớn: max--min có trọng số}
+Khi $N>4096$, các ma trận của thuật toán trên quá lớn cho GPU 16~GB. Khi đó dùng
+\begin{equation}
+j=\arg\max_{i\notin Y}\ \qhat_i\cdot\min_{t\in Y}\big(1-S_{it}\big),
+\end{equation}
+tức là chọn token vừa có điểm cao vừa \emph{xa nhất} với các token đã chọn. Token đầu tiên là token có $\qhat$ cao nhất. Trường hợp này xảy ra ở 264 trên 2374 câu MME và áp dụng giống nhau cho mọi phương pháp dùng DPP trong so sánh.
+
+% ======================================================================
+\section{S4 --- Fold DeepStack}
+\label{sec:fold}
+
+\subsection{Mục tiêu}
+Token bị bỏ biến mất khỏi đầu vào LLM. Fold giữ lại \emph{một phần nhỏ} thông tin của chúng bằng cách trộn đặc trưng DeepStack của chúng vào token giữ lại gần nhất và giống nhất. Luồng chính $v$ \textbf{không đổi}; chỉ ba tầng DeepStack thay đổi.
+
+\subsection{Bước 1: gán mỗi token bị bỏ cho một ``chủ''}
+\textbf{Mọi} token bị bỏ $d$ đều được gán cho đúng một token giữ lại:
+\begin{equation}
+a(d)=\arg\max_{k\in\text{giữ}}\Big[\cos(v_d,v_k)-\lambda\,\frac{\|g_d-g_k\|}{D}\Big],
+\end{equation}
+với $g$ là tọa độ (hàng, cột) trên lưới, $D=\sqrt{H'^2+W'^2}$ là đường chéo lưới, $\lambda=0.5$. Phần trừ là ``phạt khoảng cách'' mềm, tối đa $0.5$.
+
+\begin{vidu}[: chọn chủ trên lưới $14\times14$ ($D=19.8$)]
+Token bị bỏ $d$ có hai ứng viên:
+\begin{itemize}
+\item $k_1$: $\cos=0.80$, cách 10 ô: $0.80-0.5\cdot10/19.8=0.80-0.253=0.547$.
+\item $k_2$: $\cos=0.70$, cách 1 ô: $0.70-0.5\cdot1/19.8=0.70-0.025=0.675$.
+\end{itemize}
+Chủ là $k_2$: hơi kém giống hơn nhưng ở sát bên. Phạt khoảng cách ngăn token ở góc ảnh bị gộp vào một token rất xa chỉ vì trông giống nhau.
+\end{vidu}
+
+\subsection{Bước 2: trộn đặc trưng}
+Gọi $A(k)$ là tập token bị bỏ có chủ là $k$. Với mỗi tầng DeepStack $l=1,2,3$:
+\begin{align}
+w_{dk}&=\frac{\exp\big(\cos(v_d,v_k)/\tau\big)}{\sum_{d'\in A(k)}\exp\big(\cos(v_{d'},v_k)/\tau\big)},\\
+\tilde f_k&=f_k+\gamma\sum_{d\in A(k)}w_{dk}\,f_d,\qquad f'_k=\tilde f_k\cdot\frac{\|f_k\|}{\|\tilde f_k\|},
+\end{align}
+với $\gamma=0.5$, $\tau=0.1$. Token không có ai được gán thì giữ nguyên $f_k$.
+
+\begin{vidu}[: một chủ, hai token được gán]
+$\cos(v_{d_1},v_k)=0.9$, $\cos(v_{d_2},v_k)=0.7$. Chia cho $\tau=0.1$ được $9$ và $7$.
+\[
+w_{d_1k}=\frac{e^9}{e^9+e^7}=\frac{1}{1+e^{-2}}=0.881,\qquad w_{d_2k}=0.119.
+\]
+Vậy $\tilde f_k=f_k+0.5\,(0.881f_{d_1}+0.119f_{d_2})$. Giả sử $\|f_k\|=10$ và $\|\tilde f_k\|=12$, thì $f'_k=\tilde f_k\cdot10/12$.
+\end{vidu}
+
+\begin{visao}
+\begin{itemize}
+\item \textbf{$\tau$ nhỏ (0.1)} làm softmax ``nhọn'': token bị bỏ giống chủ nhất chiếm gần hết trọng số.
+\item \textbf{$\gamma=0.5$}: token giữ lại vẫn là thành phần chính; phần trộn vào chỉ là bổ sung.
+\item \textbf{Chuẩn hóa độ dài (norm-match)}: LLM được huấn luyện với DeepStack có độ lớn nhất định. Cộng thêm làm vector dài ra, có thể làm lệch hidden state; đưa về đúng $\|f_k\|$ giữ đúng thang đo mà LLM quen, chỉ đổi \emph{hướng}.
+\item \textbf{Không đổi $v$}: $v$ là luồng chính LLM dựa vào nhiều nhất; sửa nó rủi ro hơn.
+\end{itemize}
+Bộ tham số $\lambda,\gamma,\tau$ (bộ D-1.0) được cố định từ trước khi phát triển DeSTiL, không tinh chỉnh lại.
+\end{visao}
+
+\begin{luuy}
+Ablation trong paper cho thấy fold \textbf{không có tác động đo được} trên GQA. Nên viết fold ``giữ lại một phần thông tin'' của vùng bị bỏ, không viết ``bảo toàn'' thông tin.
+\end{luuy}
+
+% ======================================================================
+\section{LLM nhận $K$ token và trả lời}
+\begin{itemize}[leftmargin=*]
+\item Chuỗi vào LLM gồm phần chữ (system, câu hỏi, câu lệnh) và \textbf{chỉ $K$ token ảnh} giữ lại (vector $v$), đặt tại \textbf{tọa độ M-RoPE gốc} $(t,h,w)$ của chúng.
+\item $f'^{(1)},f'^{(2)},f'^{(3)}$ của $K$ token được cộng vào hidden state ở lớp 0, 1, 2.
+\item LLM (đóng băng) sinh câu trả lời bằng greedy decoding, tối đa 32 token, với attention nhanh (SDPA/FlashAttention).
+\end{itemize}
+\begin{trucgiac}
+Giữ tọa độ gốc giống như cắt bớt mảnh ghép nhưng vẫn đặt các mảnh còn lại đúng chỗ trên bảng: LLM biết token ``xe'' nằm ở góc dưới bên trái, dù các ô xung quanh đã bị bỏ.
+\end{trucgiac}
+
+% ======================================================================
+\section{Huấn luyện score head}
+\label{sec:trainall}
+
+\subsection{Bảng attention là gì}
+\label{sec:attn}
+Trong mỗi lớp của LLM, mỗi token cập nhật biểu diễn của nó bằng cách lấy thông tin từ các token đứng trước. Mức lấy thông tin được ghi trong ma trận attention:
+\begin{equation}
+A=\softmax\!\Big(\frac{QK^\top}{\sqrt{128}}+M\Big)\in\R^{T\times T},
+\end{equation}
+với $T$ là độ dài toàn chuỗi và $M$ là mặt nạ nhân quả ($-\infty$ ở các ô $j>i$). Mỗi \textbf{hàng} $i$ là token đang ``nhìn'', mỗi \textbf{cột} $j$ là token được nhìn, và $A_{ij}$ là tỉ lệ thông tin token $i$ lấy từ token $j$. Mỗi hàng có tổng bằng 1.
+
+Mỗi lớp có \textbf{16 bảng} như vậy (16 query head, do cấu trúc Qwen3-VL-2B), nên attention của một lớp là $A^{(\ell)}\in\R^{16\times T\times T}$.
+
+\begin{vidu}[: một bảng attention nhỏ (một head, một lớp)]
+Chuỗi 6 token: sys, ba token ảnh (trời, xe, đường), và hai từ ``color'', ``car''.
+\begin{center}
+\begin{tabular}{@{}l|cccccc@{}}
+\toprule
+nhìn $\downarrow$ / được nhìn $\rightarrow$ & sys & trời & xe & đường & color & car\\
+\midrule
+sys & 1.00 & & & & & \\
+trời & 0.60 & 0.40 & & & & \\
+xe & 0.50 & 0.20 & 0.30 & & & \\
+đường & 0.40 & 0.10 & 0.20 & 0.30 & & \\
+color & 0.50 & 0.05 & 0.25 & 0.05 & 0.15 & \\
+car & 0.40 & 0.03 & \textbf{0.35} & 0.07 & 0.05 & 0.10\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item Mỗi hàng cộng lại bằng 1; nửa trên bên phải trống vì token không nhìn về sau.
+\item Hàng ``car'' có ô ``xe'' lớn nhất trong phần ảnh: khi xử lý chữ ``car'', mô hình lấy thông tin chủ yếu từ vùng xe. Đây là tín hiệu ta muốn.
+\item Cột ``sys'' luôn lớn: đó là \emph{attention sink}, chỗ mô hình ``đổ'' phần chú ý thừa. Nó không mang ý nghĩa về nội dung ảnh.
+\end{itemize}
+\end{vidu}
+
+\subsection{Giai đoạn 1: tạo nhãn bằng attention teacher}
+\label{sec:teacher}
+
+\subsubsection*{Bước 1 --- chạy mô hình đầy đủ (hai lượt)}
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Lượt sinh.} Qwen3-VL với đủ $N$ token (không cắt) trả lời câu hỏi bằng \emph{greedy decoding}: mỗi bước chọn token có xác suất cao nhất, không lấy mẫu. Bỏ token kết thúc, giữ tối đa 8 token, được đáp án $\hat y$. Đây là đáp án \textbf{của chính mô hình}, không phải đáp án đúng của GQA.
+\item \textbf{Lượt teacher-forced.} Đưa cả chuỗi $[\text{prompt};\hat y]$ vào LLM trong \textbf{một lần forward}, với attention ở chế độ \emph{eager} để LLM trả ra các bảng $A^{(\ell)}$. Chỉ lượt này dùng eager; mọi lượt khác dùng attention nhanh.
+\end{enumerate}
+
+\begin{vidu}
+Câu hỏi ``What color is the car?''.
+\begin{itemize}
+\item Lượt 1: \texttt{[ảnh$\times N$] What color is the car? assistant:} $\to$ ``red'' $\to$ (kết thúc). Vậy $\hat y=$ ``red''.
+\item Lượt 2: đưa \texttt{[ảnh$\times N$] What color is the car? assistant: red} vào một lần.
+\end{itemize}
+Vì mỗi vị trí chỉ nhìn được các token phía trước, attention ở vị trí dự đoán ``red'' trong lượt 2 \emph{giống hệt} lúc mô hình tự sinh ``red'' ở lượt 1.
+\end{vidu}
+
+\begin{visao}
+\begin{itemize}
+\item \textbf{Đáp án của mô hình, không phải đáp án đúng}: ta muốn bắt chước chỗ mô hình \emph{thực sự} nhìn khi trả lời, vì đó là hành vi cần giữ sau khi cắt token. Ép vào đáp án đúng (khi mô hình trả lời sai) sẽ đọc attention của một chuỗi mà mô hình không tự sinh ra.
+\item \textbf{Hai lượt}: attention eager chậm và rất tốn bộ nhớ (phải lưu đủ ma trận $T\times T$ cho mỗi head). Lượt teacher-forced cho attention của \emph{mọi} vị trí trong một lần, nên chỉ cần bật eager một lần.
+\item \textbf{Ưu điểm khi suy luận}: các phương pháp như FastV phải đọc attention bên trong LLM ngay lúc suy luận, nên phụ thuộc eager và phải chạy LLM với đủ $N$ token. DeSTiL chỉ cần attention lúc huấn luyện offline.
+\end{itemize}
+\end{visao}
+
+\subsubsection*{Bước 2 --- đọc attention}
+Từ mỗi bảng $A^{(\ell)}$ với $\ell\in\{8,\dots,19\}$ (12 lớp giữa trong 28 lớp), lấy:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Cột}: $N$ vị trí token ảnh.
+\item \textbf{Hàng đáp án} $\mathcal{R}_\text{ans}$: các vị trí \emph{dự đoán} token đáp án, gồm vị trí cuối của prompt (\texttt{assistant:}) và $\hat y_1,\dots,\hat y_{m-1}$. Token $\hat y_t$ được dự đoán tại vị trí \emph{ngay trước} nó, nên ta không lấy hàng của chính $\hat y_m$.
+\item \textbf{Hàng câu hỏi} $\mathcal{R}_q$: các vị trí của từ câu hỏi trong chuỗi, bắt đầu ngay sau token kết thúc ảnh.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[scale=0.55]
+  % tam giác dưới
+  \foreach \i in {0,...,11}{\foreach \j in {0,...,\i}{\fill[gray!12] (\j,-\i) rectangle ++(1,-1);}}
+  % hàng câu hỏi x cột ảnh
+  \foreach \i in {7,8,9}{\foreach \j in {2,...,5}{\fill[red!40] (\j,-\i) rectangle ++(1,-1);}}
+  % hàng đáp án x cột ảnh
+  \foreach \j in {2,...,5}{\fill[orange!70] (\j,-10) rectangle ++(1,-1);}
+  \draw[step=1,gray!50] (0,-12) grid (12,0);
+  \foreach \lab [count=\pos from 0] in {sys,vs,T1,T2,T3,T4,ve,What,color,car,asst,red}{
+    \node[font=\scriptsize,rotate=90,anchor=west] at (\pos+0.5,0.1) {\lab};
+    \node[font=\scriptsize,anchor=east] at (-0.1,-\pos-0.5) {\lab};}
+  \draw[thick] (2,-12.2)--(6,-12.2);
+  \node[font=\small] at (4,-12.8) {cột: $N$ token ảnh};
+  \node[font=\small,anchor=west,red!60!black] at (12.4,-8.5) {hàng câu hỏi $\mathcal{R}_q$};
+  \node[font=\small,anchor=west,orange!80!black] at (12.4,-10.5) {hàng đáp án $\mathcal{R}_\text{ans}$ (dự đoán ``red'')};
+\end{tikzpicture}
+\caption{Một bảng attention ($T=12$, $N=4$ token ảnh T1--T4). Vùng xám là phần nhân quả; chỉ các ô tô đỏ và cam được đọc.}
+\label{fig:attn}
+\end{figure}
+
+Sau đó gộp theo ba bước:
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Chuẩn hóa lại mỗi hàng trên $N$ cột ảnh}:
+\begin{equation}
+\tilde A^{(\ell,h)}_{rj}=\frac{A^{(\ell,h)}_{rj}}{\sum_{j'\in\text{ảnh}}A^{(\ell,h)}_{rj'}}.
+\end{equation}
+\item \textbf{Trung bình theo head rồi theo lớp}:
+\begin{equation}
+\bar A_{rj}=\frac{1}{12}\sum_{\ell=8}^{19}\ \frac{1}{16}\sum_{h=1}^{16}\tilde A^{(\ell,h)}_{rj}.
+\end{equation}
+\item \textbf{Trung bình theo hàng trong mỗi nhóm}:
+\begin{equation}
+p_{\text{ans},j}=\frac{1}{|\mathcal{R}_\text{ans}|}\sum_{r\in\mathcal{R}_\text{ans}}\bar A_{rj},\qquad
+p_{q,j}=\frac{1}{|\mathcal{R}_q|}\sum_{r\in\mathcal{R}_q}\bar A_{rj}.
+\end{equation}
+\end{enumerate}
+Mỗi bước trung bình giữ tổng bằng 1, nên $p_\text{ans}$ và $p_q$ là hai \textbf{phân phối xác suất trên $N$ token ảnh}. Nếu không tìm thấy hàng câu hỏi nào thì đặt $p_q=p_\text{ans}$.
+
+\begin{vidu}[: từ bảng tới phân phối, $N=4$ (trời, xe, đường, cây)]
+Phần cắt ra của \emph{một head, một lớp}:
+\begin{center}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+hàng & trời & xe & đường & cây & tổng\\
+\midrule
+\texttt{asst:} & 0.02 & 0.12 & 0.04 & 0.02 & 0.20\\
+What & 0.03 & 0.03 & 0.02 & 0.02 & 0.10\\
+color & 0.02 & 0.08 & 0.03 & 0.02 & 0.15\\
+car & 0.01 & 0.10 & 0.02 & 0.02 & 0.15\\
+\bottomrule
+\end{tabular}
+\end{center}
+Tổng chỉ 0.10--0.20: phần còn lại rơi vào sys và chữ. Chia mỗi hàng cho tổng của nó:
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+hàng & trời & xe & đường & cây\\
+\midrule
+\texttt{asst:} & 0.10 & \textbf{0.60} & 0.20 & 0.10\\
+What & 0.30 & 0.30 & 0.20 & 0.20\\
+color & 0.13 & \textbf{0.53} & 0.20 & 0.13\\
+car & 0.07 & \textbf{0.67} & 0.13 & 0.13\\
+\bottomrule
+\end{tabular}
+\end{center}
+Giả sử trung bình qua 16 head và 12 lớp cho đúng bảng này. Khi đó:
+\begin{itemize}
+\item $p_\text{ans}$ = hàng \texttt{asst:} $=(0.10,\,0.60,\,0.20,\,0.10)$.
+\item $p_q$ = trung bình ba hàng What, color, car $=(0.17,\,0.50,\,0.18,\,0.16)$.
+\end{itemize}
+Từ chung chung ``What'' nhìn đều; ``car'' và \texttt{asst:} tập trung vào xe.
+\end{vidu}
+
+\begin{visao}
+\begin{itemize}
+\item \textbf{Chuẩn hóa lại trên cột ảnh}: ta chỉ quan tâm \emph{trong phần nhìn vào ảnh}, token nào được nhìn nhiều. Tổng lượng attention vào ảnh thay đổi mạnh theo vị trí và bị attention sink trên token đầu chuỗi chi phối; nếu không chuẩn hóa, các hàng có tổng lớn sẽ áp đảo khi lấy trung bình.
+\item \textbf{Lớp 8--19}: lớp đầu chủ yếu trộn thông tin cục bộ; lớp cuối tập trung vào việc sinh chữ; các lớp giữa là nơi chữ ``đọc'' ảnh rõ nhất. Đây là lựa chọn thiết kế, \textbf{chưa có ablation} theo dải lớp.
+\item \textbf{Hai nhóm hàng}: $p_\text{ans}$ sát với đáp án nhất nhưng chỉ có 1--3 hàng nên nhiễu, và phụ thuộc vào chính đáp án. $p_q$ có nhiều hàng hơn nên ổn định hơn, và gần với thông tin head có lúc suy luận (chỉ có câu hỏi).
+\end{itemize}
+\end{visao}
+
+\subsubsection*{Bước 3 --- nhãn cuối}
+\begin{equation}
+p=0.5\,p_\text{ans}+0.5\,p_q.
+\end{equation}
+Với ví dụ trên: $p=(0.13,\,0.55,\,0.19,\,0.13)$. Xếp lại lên lưới ảnh, $p$ là một \textbf{bản đồ nhiệt}: vùng sáng là nơi mô hình nhìn.
+
+\begin{luuy}
+Lớp 8--19 và trọng số 0.5/0.5 được cố định trong giai đoạn phát triển trên GQA val, không tinh chỉnh trên tập test. Không nên gọi chúng là ``tối ưu''.
+\end{luuy}
+
+Mỗi mẫu được lưu vào shard (500 mẫu/shard) gồm nhãn $p_\text{ans}$, $p_q$ \emph{và} đặc trưng đầu vào của head sau PCA ($v$, $f^{(1..3)}$, $z_\text{rel}$, $z_\text{ms}$, $e$). Nhờ vậy Giai đoạn 2 không cần chạy Qwen3-VL nữa.
+
+\subsection{Giai đoạn 2: hàm mất mát và huấn luyện}
+\label{sec:train}
+
+\subsubsection*{Đầu vào và đầu ra của head khi huấn luyện}
+\begin{tcolorbox}[colback=yellow!8,colframe=yellow!50!black]
+\textbf{Đầu vào} của head là \textbf{kết quả của S1}: các thành phần tạo nên $u_i$ và $w$. \textbf{Nhãn} $p$ \emph{không bao giờ} là đầu vào; nó chỉ dùng để tính loss. Head cũng \emph{không} thấy đáp án $\hat y$.
+\end{tcolorbox}
+
+Cụ thể, mỗi mẫu trong shard lưu sẵn (\file{data.py:24}):
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Lưu trong shard & Kích thước & Ghi chú\\
+\midrule
+$\mathrm{PCA}(v)$ & $N\times256$ & $v$ chuẩn hóa độ dài 1 rồi PCA\\
+$\mathrm{PCA}(\hat f^{(1..3)})$ & $3\times N\times64$ & DeepStack chuẩn hóa theo tầng rồi PCA\\
+$z_\text{rel}$, $z_\text{ms}$ & $N$, $N$ & hai điểm DSFold\\
+$\mathrm{PCA}(e)$ & $N_q\times256$ & từ câu hỏi (đã bỏ từ dừng), độ dài 1 rồi PCA\\
+lưới $H'\times W'$ & 2 số & để tính PE 2D\\
+\midrule
+$p_\text{ans}$, $p_q$ & $N$, $N$ & \textbf{nhãn}, chỉ dùng trong loss\\
+\bottomrule
+\end{tabular}
+\end{center}
+Khi huấn luyện, mỗi mẫu được đọc lại, tính PE 2D từ lưới, bốc ngẫu nhiên một mức $r$ để có $\log r$, rồi đưa vào head. Bên trong head, các phép chiếu Linear \emph{học được} ($P_v$, $P_1..P_3$, $P_q$) được áp lên phần PCA, sau đó mới ghép thành $u_i\in\R^{467}$ và $w\in\R^{N_q\times256}$. Vì vậy nói chính xác: \emph{đầu vào là đầu ra cố định của S1; việc ghép thành $u_i$ và $w$ xảy ra ở lớp đầu của head}.
+
+Một vòng huấn luyện cho một mẫu:
+\begin{center}
+\begin{tikzpicture}[
+  node distance=4mm and 6mm,
+  bx/.style={draw,rounded corners,align=center,font=\small,minimum height=10mm},
+  arr/.style={-Stealth,thick}]
+  \node[bx,fill=algo,draw=algoB] (in) {Đầu ra S1\\(shard) + $\log r$};
+  \node[bx,fill=learn,draw=learnB,right=of in] (head) {Score head\\$\to s\in\R^N$};
+  \node[bx,right=of head] (sm) {$\softmax(s)$};
+  \node[bx,right=of sm] (ce) {$\mathcal{L}=\mathrm{CE}(p,\softmax(s))$};
+  \node[bx,fill=gray!10,below=of ce] (p) {nhãn $p$ (teacher)};
+  \draw[arr] (in)--(head); \draw[arr] (head)--(sm); \draw[arr] (sm)--(ce); \draw[arr] (p)--(ce);
+  \draw[arr,dashed] (ce.north) -- ++(0,6mm) -| node[pos=0.25,above,font=\scriptsize]{gradient, cập nhật trọng số} (head.north);
+\end{tikzpicture}
+\end{center}
+
+\subsubsection*{Hàm mất mát}
+Head cho điểm $s\in\R^N$. Đổi thành phân phối dự đoán $\softmax(s)_i=e^{s_i}/\sum_je^{s_j}$, rồi so với nhãn bằng cross-entropy:
+\begin{equation}
+\mathcal{L}=\mathrm{CE}\big(p,\softmax(s)\big)=-\sum_{i=1}^N p_i\log\softmax(s)_i.
+\end{equation}
+
+\begin{trucgiac}
+\begin{itemize}
+\item $\mathrm{CE}(p,\hat p)=H(p)+\mathrm{KL}(p\,\|\,\hat p)$. $H(p)$ là hằng số (không phụ thuộc head), nên giảm CE tương đương làm phân phối của head \textbf{giống} phân phối attention của teacher.
+\item Đạo hàm rất gọn: $\partial\mathcal{L}/\partial s_i=\softmax(s)_i-p_i$. Token nào head cho điểm \emph{quá cao} so với teacher thì bị kéo xuống; token nào bị \emph{đánh giá thấp} thì được đẩy lên.
+\item Hàm mất mát chỉ quan tâm \emph{tỉ lệ} giữa các token (cộng cùng một hằng số vào mọi $s_i$ không đổi softmax). Đó đúng là điều cần cho việc xếp hạng.
+\end{itemize}
+\end{trucgiac}
+
+\begin{vidu}[: tính loss với $p=(0.13,\,0.55,\,0.19,\,0.13)$]
+\textbf{Head tốt}: $s=(0,\,1.5,\,0.3,\,0)$. $e^{s}=(1,\,4.48,\,1.35,\,1)$, tổng $7.83$, nên $\softmax(s)=(0.128,\,0.572,\,0.172,\,0.128)$.
+\[
+\mathcal{L}=-(0.13\ln0.128+0.55\ln0.572+0.19\ln0.172+0.13\ln0.128)=1.176.
+\]
+Entropy của nhãn $H(p)=1.175$, nên $\mathrm{KL}\approx0.001$: gần như khớp hoàn toàn.
+
+\textbf{Head kém}: $s=(1.5,\,0,\,0,\,0)$, cho $\softmax(s)=(0.599,\,0.134,\,0.134,\,0.134)$ và $\mathcal{L}=1.816$ ($\mathrm{KL}=0.641$).
+Đạo hàm $\softmax(s)-p=(0.469,\,-0.416,\,-0.056,\,0.004)$: gradient descent sẽ \emph{giảm} điểm ``trời'' và \emph{tăng} điểm ``xe''.
+\end{vidu}
+
+\subsubsection*{Vì sao huấn luyện dùng softmax nhưng suy luận dùng softplus}
+\label{sec:softplus}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+& Huấn luyện & Suy luận\\
+\midrule
+Cần gì & so sánh với nhãn $p$ (một phân phối) & trọng số dương cho từng token trong DPP\\
+Hàm dùng & $\softmax(s)$ & $\qhat=\softplus(s)+10^{-3}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+Lúc huấn luyện phải dùng softmax vì $p$ có tổng bằng 1; muốn so hai phân phối bằng cross-entropy thì đầu ra của head cũng phải là phân phối. Lúc suy luận có bốn lý do không dùng softmax.
+
+\paragraph{(1) Phép chia của softmax không có tác dụng trong DPP.}
+$\softmax(s)_i=e^{s_i}/Z$ với $Z=\sum_je^{s_j}$ chung cho mọi token. Nếu nhân mọi $\qhat_i$ với cùng một hằng số $c>0$ thì $\Lambda=\mathrm{diag}(\qhat)S\,\mathrm{diag}(\qhat)$ nhân $c^2$, mọi mức tăng $d_i^2$ cũng nhân $c^2$, nên thứ tự chọn \textbf{không đổi}. Do đó dùng softmax lúc suy luận thực chất là dùng $\qhat_i=e^{s_i}$. Câu hỏi thật sự là: vì sao dùng softplus thay vì hàm mũ.
+
+\paragraph{(2) Hàm mũ quá dốc, làm DPP mất phần đa dạng.}
+Nhắc lại $\log\det\Lambda_Y=2\sum_{i\in Y}\log\qhat_i+\log\det S_Y$.
+\begin{itemize}[leftmargin=*]
+\item Với $\qhat=e^{s}$ thì $\log\qhat_i=s_i$: phần chất lượng tăng \emph{tuyến tính} theo điểm, trong khi phần đa dạng $\log\det S_Y$ bị chặn (không vượt quá 0). Chênh lệch điểm vài đơn vị đã đủ lấn át phần đa dạng, nên DPP gần như thành top-$K$.
+\item Với softplus, khi $s>0$ thì $\qhat\approx s$, nên $\log\qhat\approx\log s$: chênh lệch điểm bị ``nén'' lại, phần đa dạng vẫn có tiếng nói.
+\end{itemize}
+
+\begin{vidu}[: token xe trùng lặp hay token đường?]
+Đã chọn một ô xe A. Còn lại ô xe B ($\cos(v_A,v_B)=0.95$) và ô đường C ($\cos(v_A,v_C)\approx0$). Theo Mục~\ref{sec:dpp}, mức tăng là $d_B^2\approx\qhat_B^2(1-0.95^2)=0.0975\,\qhat_B^2$ và $d_C^2\approx\qhat_C^2$. Vậy B chỉ thắng khi $\qhat_B/\qhat_C>1/\sqrt{0.0975}=3.2$.
+
+Giả sử head cho $s_B=6$, $s_C=3$:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+& $\qhat_B$ & $\qhat_C$ & tỉ lệ $\qhat_B/\qhat_C$\\
+\midrule
+$e^{s}$ (tương đương softmax) & 403 & 20.1 & 20 $\Rightarrow$ chọn B (trùng lặp)\\
+$\softplus(s)$ & 6.00 & 3.05 & 2.0 $\Rightarrow$ chọn C (đa dạng)\\
+\bottomrule
+\end{tabular}
+\end{center}
+Với hàm mũ, chỉ cần $s_B-s_C>\ln3.2\approx1.16$ là DPP đã chọn token trùng lặp. Với softplus, cần $s_B$ lớn hơn khoảng 3.2 lần $s_C$.
+\end{vidu}
+
+\paragraph{(3) Softmax phụ thuộc vào số token $N$.}
+Vì chia cho tổng của cả $N$ token, giá trị trung bình của softmax là $1/N$: khoảng $0.005$ với ảnh GQA 200 token, nhưng chỉ khoảng $0.00008$ với ảnh MME 13\,000 token. Thang đo của chất lượng vì vậy đổi theo kích thước ảnh. Softplus tính riêng cho từng token, không phụ thuộc $N$.
+
+\paragraph{(4) Softmax có thể kích hoạt quy tắc dừng của DPP.}
+DPP dừng khi mức tăng lớn nhất nhỏ hơn $10^{-6}$, và khởi đầu $d_i^2=\qhat_i^2$. Với ảnh lớn, $\qhat_i\sim10^{-4}$ nên $\qhat_i^2\sim10^{-8}<10^{-6}$: thuật toán dừng ngay từ bước đầu và lấp toàn bộ $K$ chỗ bằng top-$K$ theo chất lượng, tức là \textbf{mất hoàn toàn phần đa dạng}. Với softplus, hằng số $10^{-3}$ cộng thêm và thang đo không bị chia cho $N$ giúp tránh trường hợp này.
+
+\paragraph{Thứ hạng được giữ nguyên.}
+Cả $\softmax$ (với $s$ cố định của một ảnh) và $\softplus$ đều \textbf{đơn điệu tăng} theo $s_i$, nên token nào head xếp cao lúc huấn luyện thì vẫn xếp cao lúc suy luận. Hai hàm chỉ khác nhau ở \emph{độ chênh} giữa các token, và chính độ chênh này quyết định DPP cân bằng chất lượng với đa dạng ra sao.
+
+\begin{luuy}
+\begin{itemize}[leftmargin=*]
+\item Loss softmax/CE \textbf{không phụ thuộc mức tuyệt đối} của $s$: cộng cùng một hằng số vào mọi $s_i$ không đổi loss. Nhưng softplus \textbf{có} phụ thuộc mức tuyệt đối: với $s$ âm, $\softplus(s)\approx e^{s}$ (giống hàm mũ); với $s$ dương, $\softplus(s)\approx s$ (gần tuyến tính). Mức cân bằng chất lượng/đa dạng thực tế vì vậy phụ thuộc vào mức điểm mà head ``tình cờ'' học được, không do ta kiểm soát trực tiếp.
+\item Code và paper hiện \textbf{chưa có ablation} so sánh softplus với hàm mũ (hay softmax) cho head. Các lý do trên là lập luận thiết kế, chưa phải kết quả đo. Nếu muốn khẳng định trong paper, nên chạy thêm phép so sánh này trên tập phát triển (tune2k) ở L1 và L3.
+\end{itemize}
+\end{luuy}
+
+\subsubsection*{Cấu hình huấn luyện}
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Dữ liệu & 50\,000 câu GQA train balanced\\
+Tập để riêng & 10\% số \emph{ảnh} (mọi câu hỏi của ảnh đó), dùng chọn checkpoint\\
+Tối ưu & AdamW, lr $3\cdot10^{-4}$, cosine schedule, weight decay 0.01\\
+Batch & 16 mẫu (mỗi mẫu là một ảnh--câu hỏi với $N$ riêng)\\
+Epoch & tối đa 20, dừng sớm nếu 3 epoch liền không cải thiện\\
+Budget khi huấn luyện & mỗi mẫu bốc ngẫu nhiên một mức trong L1--L5 (cho đầu vào $\log r$)\\
+Chọn checkpoint & recall@$K$ ở mức L3 trên tập để riêng (tốt nhất ở epoch 19)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{visao}
+Tách tập để riêng \emph{theo ảnh} (không theo câu hỏi) để head không được ``thấy trước'' ảnh khi đánh giá: nhiều câu hỏi GQA dùng chung một ảnh, nếu tách theo câu hỏi thì head có thể nhớ ảnh.
+\end{visao}
+
+\subsubsection*{Thước đo recall@$K$}
+\begin{equation}
+\mathrm{recall@}K=\frac{\big|\mathrm{top}_K(s)\cap\mathrm{top}_K(p)\big|}{K}.
+\end{equation}
+\begin{vidu}
+$K=4$. Teacher top-4 = \{xe$_1$, xe$_2$, xe$_3$, trời$_0$\}; head top-4 = \{xe$_1$, xe$_2$, trời$_0$, xe$_4$\}. Trùng 3 token, nên recall@4 $=3/4=0.75$.
+\end{vidu}
+Kết quả: head \texttt{3d} đạt \textbf{0.836} ở L3 trên tập để riêng; điểm thủ công $z_\text{rel}+0.5\,z_\text{ms}$ chỉ đạt \textbf{0.304}. Head học được nhiều hơn hẳn các prior thủ công.
+
+% ======================================================================
+\section{Ví dụ trọn vẹn từ đầu tới cuối}
+\label{sec:full}
+
+Ảnh nhỏ có lưới $4\times4$ ($N=16$). Hàng 0 là bầu trời, hàng 1 là cây và tòa nhà, chiếc xe đỏ chiếm 4 ô ở giữa hai hàng dưới, xung quanh là đường. Câu hỏi: ``What color is the car?''. Budget L3: $r=2/9$, nên $K=\lceil 16\cdot2/9\rceil=\lceil3.56\rceil=4$.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.95]
+  % cảnh
+  \begin{scope}
+  \foreach \c in {0,...,3}{\fill[cyan!25] (\c,0) rectangle ++(1,-1);}
+  \fill[green!35] (0,-1) rectangle ++(1,-1); \fill[green!35] (1,-1) rectangle ++(1,-1);
+  \fill[gray!40] (2,-1) rectangle ++(1,-1); \fill[gray!40] (3,-1) rectangle ++(1,-1);
+  \foreach \r in {2,3}{\fill[gray!15] (0,-\r) rectangle ++(1,-1); \fill[gray!15] (3,-\r) rectangle ++(1,-1);
+    \fill[red!55] (1,-\r) rectangle ++(1,-1); \fill[red!55] (2,-\r) rectangle ++(1,-1);}
+  \draw[step=1] (0,-4) grid (4,0);
+  \node at (2,-4.5) {\small cảnh};
+  \end{scope}
+  % nhãn teacher p
+  \begin{scope}[xshift=5.5cm]
+  \def\pv{{12,2,2,2, 2,2,3,3, 4,16,14,4, 5,13,11,5}}
+  \foreach \idx in {0,...,15}{
+    \pgfmathtruncatemacro{\rr}{int(\idx/4)}\pgfmathtruncatemacro{\cc}{mod(\idx,4)}
+    \pgfmathtruncatemacro{\pval}{\pv[\idx]}\pgfmathtruncatemacro{\shade}{min(100,\pval*6)}
+    \fill[orange!\shade] (\cc,-\rr) rectangle ++(1,-1);
+    \node[font=\scriptsize] at (\cc+0.5,-\rr-0.5) {.\ifnum\pval<10 0\fi\pval};}
+  \draw[step=1] (0,-4) grid (4,0);
+  \node at (2,-4.5) {\small nhãn teacher $p$};
+  \end{scope}
+  % tập giữ
+  \begin{scope}[xshift=11cm]
+  \draw[step=1,gray!60] (0,-4) grid (4,0);
+  \foreach \idx in {0,9,10,12}{
+    \pgfmathtruncatemacro{\rr}{int(\idx/4)}\pgfmathtruncatemacro{\cc}{mod(\idx,4)}
+    \fill[blue!35] (\cc,-\rr) rectangle ++(1,-1);}
+  \draw[step=1] (0,-4) grid (4,0);
+  \node at (2,-4.5) {\small $K=4$ token giữ (DPP)};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Teacher (lúc huấn luyện).} Mô hình đầy đủ trả lời ``red''. Attention cho nhãn $p$ ở hình giữa: 4 ô xe chiếm $0.16+0.14+0.13+0.11=0.54$; ô trời góc trái trên có $0.12$ dù không liên quan (attention sink); các ô còn lại nhỏ.
+\item \textbf{S1 (lúc suy luận).} Mỗi ô được mô tả bởi $u_i$ (467 số). Câu hỏi còn \{color, car\} sau khi bỏ từ dừng. $z_\text{rel}$ cao ở ô xe.
+\item \textbf{S2.} Head đã học bắt chước teacher, cho $\qhat$ xấp xỉ: xe $1.6,1.4,1.3,1.1$; ô trời sink $1.2$; đường $0.4$--$0.5$; còn lại $0.2$--$0.3$.
+\item \textbf{S3 (DPP, số làm tròn).}
+  \begin{itemize}
+  \item Bước 1: chọn ô xe điểm cao nhất (hàng 2, cột 1), $d^2=1.6^2=2.56$.
+  \item Bước 2: các ô xe khác rất giống ô vừa chọn ($\cos\approx0.9$), nên $d^2\approx\qhat^2(1-0.81)$: ô xe thứ hai còn $1.96\cdot0.19=0.37$. Ô trời sink khác hẳn ($\cos\approx0.1$): $1.44\cdot0.99=1.43$. Chọn \textbf{ô trời}.
+  \item Bước 3: ô xe thứ hai ($\approx0.37$) vẫn hơn các ô đường ($\approx0.23$). Chọn \textbf{ô xe thứ hai}.
+  \item Bước 4: ô xe thứ ba giờ giống \emph{cả hai} ô xe đã chọn nên mức tăng còn rất nhỏ; ô đường (hàng 3, cột 0) còn $\approx0.5^2\cdot0.91=0.23$. Chọn \textbf{ô đường}.
+  \end{itemize}
+  So với top-4 thuần (3 ô xe + ô trời), DPP đổi một ô xe thừa lấy một ô đường cạnh xe.
+\item \textbf{S4.} 12 ô bị bỏ được gán chủ: 2 ô xe còn lại về các ô xe giữ lại (rất giống, sát bên); 3 ô trời về ô trời giữ lại; ô đường về ô đường giữ lại; cây và nhà về chủ có $\cos-\lambda\cdot$khoảng cách lớn nhất. DeepStack của mỗi chủ được trộn thêm đặc trưng của các ô được gán rồi chuẩn hóa độ dài.
+\item \textbf{LLM.} Đọc 4 token ảnh (thay vì 16) tại đúng vị trí gốc, cộng DeepStack đã fold ở lớp 0--2, và trả lời ``red''.
+\end{enumerate}
+
+\begin{luuy}
+Ví dụ cho thấy ô trời ``sink'' cũng được giữ, vì teacher dồn attention vào nó và head bắt chước theo. Đây là điểm yếu thật của nhãn attention; biến thể DeSTiL-fc trong paper dùng nhãn tương phản để bỏ phần chung này.
+\end{luuy}
+
+% ======================================================================
+\section{Tóm tắt: thành phần nào, vì sao, đã kiểm chứng chưa}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{3.2cm}p{6.4cm}p{5.6cm}@{}}
+\toprule
+Thành phần & Vì sao dùng & Trạng thái\\
+\midrule
+Score head học từ attention & Đo token LLM \emph{thực sự dùng}, không chỉ giống câu hỏi & Ablation: thay điểm thủ công DSFold-D bằng head, $+6.70$ điểm ở L1, $+3.05$ ở L3 (tune2k)\\
+Kiến trúc \texttt{3d} & Self/cross-attention + khớp từ $b_i$ & So sánh hiện có đổi cả nguồn nhãn, \textbf{chưa tách riêng}\\
+DPP & Vừa chất lượng vừa đa dạng & Phương pháp chuẩn (Chen 2018)\\
+Max--min khi $N>4096$ & Giới hạn bộ nhớ GPU 16~GB & Áp dụng như nhau cho mọi phương pháp DPP\\
+Fold DeepStack & Giữ bốn luồng nhất quán, giữ một phần thông tin vùng bỏ & Ablation: không tác động đo được trên GQA\\
+Lớp 8--19, trộn 0.5/0.5 & Lớp giữa; cân bằng đáp án và câu hỏi & Cố định trên GQA val, \textbf{chưa ablation}\\
+PCA 256/64 & Giới hạn lưu trữ & Lựa chọn thiết kế\\
+$z_\text{rel}$, $z_\text{ms}$ trong $u_i$ & Prior thủ công cho head & \textbf{Chưa ablation} riêng\\
+$\log r$ & Ý định: thích nghi theo budget & Nhãn không phụ thuộc $r$, \textbf{có lẽ không được dùng}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Bảng ký hiệu}
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+$N$, $K$ & số token ảnh trước và sau khi chọn; $K=\lceil rN\rceil$\\
+$r$ & tỉ lệ giữ (budget), L1--L5 $=1/18,1/9,2/9,1/3,1/2$\\
+$H'\times W'$ & lưới token ảnh\\
+$v_i$ & vector chính của token $i$ (2048 chiều)\\
+$f_i^{(l)}$ & đặc trưng DeepStack tầng $l$ (từ ViT lớp 5, 11, 17)\\
+$e_j$, $N_q$ & embedding từ câu hỏi (sau bỏ từ dừng), số từ\\
+$z_\text{rel}$, $z_\text{ms}$ & z-score của điểm liên quan và điểm khác biệt tầng\\
+$u_i$ & vector đặc trưng 467 chiều của token $i$\\
+$w$, $\tilde w$ & đặc trưng câu hỏi trước và sau text transformer\\
+$a_i$, $b_i$, $s_i$ & điểm chung, điểm khớp từ, điểm cuối\\
+$\qhat_i$ & chất lượng $=\softplus(s_i)+10^{-3}$\\
+$S$, $\Lambda$ & ma trận cosine giữa các token; kernel DPP\\
+$\lambda,\gamma,\tau$ & tham số fold: phạt khoảng cách, mức trộn, nhiệt độ ($0.5, 0.5, 0.1$)\\
+$T$ & độ dài toàn chuỗi đầu vào LLM\\
+$A^{(\ell)}$ & attention lớp $\ell$, kích thước $16\times T\times T$\\
+$p_\text{ans}$, $p_q$, $p$ & phân phối attention từ hàng đáp án, hàng câu hỏi, và nhãn trộn\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
